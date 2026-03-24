@@ -1,0 +1,912 @@
+//@ pragma UseQApplication
+// Quickshell status bar for Hyprland
+// Entry point: ~/.config/quickshell/shell.qml
+// Tested against Quickshell v0.2.1
+//
+// Features:
+//   - Hyprland workspace switcher (clickable, left side)
+//   - Clock with date (center)
+//   - System tray with right-click menu (right side)
+//   - Volume level via native PipeWire bindings (right side)
+//   - Active window title (left side, after workspaces)
+//
+// Dependencies:
+//   - quickshell
+//   - hyprland (IPC via Quickshell.Hyprland)
+//   - pipewire (native PipeWire bindings via Quickshell.Services.Pipewire)
+//
+// nerd font for icons
+
+import QtQuick
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Wayland
+import Quickshell.Io
+import Quickshell.Hyprland
+import Quickshell.Widgets
+import Quickshell.Services.SystemTray
+import Quickshell.Services.Pipewire
+import "sidebar"
+import "network"
+import "audio"
+
+ShellRoot {
+    id: root
+
+    // ---------------------
+    // Theme / font settings
+    // ---------------------
+    readonly property color bgColor:        "#282828"   // Gruvbox Dark bg
+    readonly property color fgColor:        "#ebdbb2"   // fg
+    readonly property color mutedColor:     "#504945"   // bg2
+    readonly property color accentBlue:     "#83a598"   // bright blue
+    readonly property color accentLavender: "#d3869b"   // bright purple
+    readonly property color accentGreen:    "#b8bb26"   // bright green
+    readonly property color accentYellow:   "#fabd2f"   // bright yellow
+    readonly property color accentRed:      "#fb4934"   // bright red
+    readonly property color accentMauve:    "#d3869b"   // bright purple
+    readonly property color accentTeal:     "#8ec07c"   // bright aqua
+    readonly property color accentOrange:   "#fe8019"   // bright orange
+
+    readonly property string fontFamily:    "FiraCode Nerd Font"
+    readonly property int    fontSize:      15
+    readonly property int    barHeight:     32
+    readonly property int    barGap:        8    // top gap
+    readonly property int    barBottomGap:  0    // bottom gap (below bar)
+    readonly property int    barSideMargin: 8    // left + right inset
+
+    // Pill capsule theming
+    readonly property color pillColor:   Qt.rgba(0.157, 0.157, 0.157, 0.88)  // #282828 at 88% opacity
+    readonly property int  pillRadius:   14    // full capsule end-caps
+    readonly property int  pillHPad:     10    // horizontal padding
+    readonly property int  pillVPad:     4     // vertical padding
+    readonly property int  pillSpacing:  6     // gap between pills
+
+    // ---------------------
+    // Global state
+    // ---------------------
+    readonly property var defaultSink: Pipewire.defaultAudioSink
+    readonly property real volumeRaw: defaultSink?.audio?.volume ?? 0
+    readonly property int volumeLevel: Math.round(volumeRaw * 100)
+    readonly property bool volumeMuted: defaultSink?.audio?.muted ?? false
+    property string activeWindowTitle: ""
+    property string _windowBuf: ""
+    property real cpuPercent: 0
+    property real ramGb: 0
+    property var _cpuPrev: null
+
+    // ---------------------
+    // Weather state (populated from weather.sh script)
+    // ---------------------
+    property string weatherIcon: ""
+    property string weatherTemp: "0"
+    property string weatherFeelsLike: "0"
+    property color weatherHex: "#8ec07c"
+    property string weatherDesc: ""
+    property bool weatherReady: false
+    property string weatherError: ""
+    property var weatherForecast: []
+    property int weatherSelectedDay: 0
+    property string _weatherBarBuf: ""
+    property string _weatherJsonBuf: ""
+    readonly property string weatherScript:
+        Qt.resolvedUrl("scripts/weather.sh").toString().replace("file://", "")
+
+    // ---------------------
+    // Track all PipeWire nodes for full property access
+    // ---------------------
+    PwObjectTracker {
+        objects: [root.defaultSink].concat(Pipewire.nodes.values)
+    }
+
+    // ---------------------
+    // System clock (built-in, no process needed)
+    // ---------------------
+    SystemClock {
+        id: clock
+        precision: SystemClock.Seconds
+    }
+
+    // ---------------------
+    // Screenshot via grimblast
+    // ---------------------
+    Process {
+        id: screenshotProc
+        // copysave: copies to clipboard AND saves to ~/Pictures/<timestamp>.png
+        // bash wrapper: notify on success, silent on cancel (Escape key)
+        command: ["bash", "-c",
+            "FILE=$(grimblast copysave area) && " +
+            "notify-send -i camera-photo -t 3000 'Screenshot' \"Saved & copied:\\n$(basename $FILE)\""
+        ]
+    }
+
+    // ---------------------
+    // Active window title via Hyprland IPC
+    // ---------------------
+    Process {
+        id: windowProc
+        command: ["hyprctl", "activewindow", "-j"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                root._windowBuf += line
+            }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._windowBuf)
+                root.activeWindowTitle = d.title || ""
+            } catch(e) {
+                root.activeWindowTitle = ""
+            }
+            root._windowBuf = ""
+        }
+    }
+
+    // Refresh active window on every Hyprland event (instant)
+    Connections {
+        target: Hyprland
+        function onRawEvent(event) {
+            // activewindow, openwindow, closewindow, focusedmon all affect the title
+            if (event.name === "activewindow" || event.name === "openwindow" ||
+                event.name === "closewindow"  || event.name === "focusedmon") {
+                windowProc.running = true
+            }
+        }
+    }
+
+    // Fallback poll for active window (catches edge cases)
+    Timer {
+        interval: 500
+        running: true
+        repeat: true
+        onTriggered: {
+            windowProc.running = true
+        }
+    }
+
+    // ---------------------
+    // CPU usage (polls /proc/stat every 2 s)
+    // ---------------------
+    Process {
+        id: cpuProc
+        command: ["awk", "/^cpu /{printf \"%d %d\", $2+$3+$4+$5+$6+$7+$8, $5}", "/proc/stat"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                var parts = line.trim().split(" ")
+                if (parts.length < 2) return
+                var total = parseInt(parts[0])
+                var idle  = parseInt(parts[1])
+                if (root._cpuPrev !== null) {
+                    var dt = total - root._cpuPrev.total
+                    var di = idle  - root._cpuPrev.idle
+                    root.cpuPercent = dt > 0 ? Math.round((dt - di) / dt * 100) : root.cpuPercent
+                }
+                root._cpuPrev = { total: total, idle: idle }
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: cpuProc.running = true
+    }
+
+    // ---------------------
+    // RAM usage (polls /proc/meminfo every 2 s)
+    // ---------------------
+    Process {
+        id: ramProc
+        command: ["awk", "/^MemTotal/{t=$2} /^MemAvailable/{a=$2} END{printf \"%.1f\", (t-a)/1024/1024}", "/proc/meminfo"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                var val = parseFloat(line.trim())
+                if (!isNaN(val)) root.ramGb = val
+            }
+        }
+    }
+
+    Timer {
+        interval: 2000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: ramProc.running = true
+    }
+
+    // ---------------------
+    // Weather bar data (lightweight, every 15 min)
+    // ---------------------
+    Process {
+        id: weatherBarProc
+        command: ["bash", root.weatherScript, "--bar"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                root._weatherBarBuf += line
+            }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._weatherBarBuf)
+                if (d.ready) {
+                    root.weatherIcon = d.icon
+                    root.weatherTemp = String(Math.round(d.temp))
+                    root.weatherFeelsLike = String(Math.round(d.feels_like))
+                    root.weatherHex = d.hex
+                    root.weatherDesc = d.desc
+                    root.weatherReady = true
+                    root.weatherError = ""
+                }
+            } catch(e) {
+                root.weatherError = "Weather data unavailable"
+            }
+            root._weatherBarBuf = ""
+        }
+    }
+
+    Timer {
+        interval: 900000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: weatherBarProc.running = true
+    }
+
+    // ---------------------
+    // Weather full forecast (every 30 min)
+    // ---------------------
+    Process {
+        id: weatherForecastProc
+        command: ["bash", root.weatherScript, "--json"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                root._weatherJsonBuf += line
+            }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._weatherJsonBuf)
+                if (d.forecast) {
+                    root.weatherForecast = d.forecast
+                }
+            } catch(e) {
+                console.warn("Weather JSON parse error:", e)
+                root.weatherError = "Forecast parse error"
+            }
+            root._weatherJsonBuf = ""
+        }
+    }
+
+    Timer {
+        interval: 1800000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (!weatherForecastProc.running) {
+                root._weatherJsonBuf = ""
+                weatherForecastProc.running = true
+            }
+        }
+    }
+
+    // ---------------------
+    // One PanelWindow per screen via Variants
+    // ---------------------
+    Variants {
+        model: Quickshell.screens
+
+        PanelWindow {
+            id: bar
+            required property var modelData
+            screen: modelData
+
+            // Hyprland monitor object for this bar's screen
+            readonly property var hyprMonitor: Hyprland.monitors.values.find(
+                function(m) { return m.name === bar.screen.name }) ?? null
+
+            // Workspace IDs for this monitor: DP-1 gets 1,2 — HDMI-A-1 gets 3,4
+            readonly property var monitorWsIds: bar.screen.name === "DP-1" ? [1, 2] : [3, 4]
+
+            // Anchor to the top edge, spanning full width
+            anchors {
+                top:   true
+                left:  true
+                right: true
+            }
+
+            // Reserve space so windows don't overlap the bar
+            exclusiveZone: root.barHeight + root.barGap + root.barBottomGap
+
+            implicitHeight: root.barHeight + root.barGap + root.barBottomGap
+            color: "transparent"   // background painted by inner Rectangle
+
+            // -------------------------------------------------------
+            // Root bar container (transparent — pills provide bg)
+            // -------------------------------------------------------
+            Item {
+                anchors {
+                    fill:         parent
+                    topMargin:    root.barGap
+                    bottomMargin: root.barBottomGap
+                    leftMargin:   root.barSideMargin
+                    rightMargin:  root.barSideMargin
+                }
+
+                // True-centered clock + weather pill
+                Pill {
+                    anchors.centerIn: parent
+                    z: 1
+                    innerSpacing: 16
+
+                    Text {
+                        text: Qt.formatDateTime(clock.date, "ddd d MMM   HH:mm")
+                        color: root.accentOrange
+                        font.pixelSize: root.fontSize; font.family: root.fontFamily
+                        font.bold: true
+                    }
+
+                    Text {
+                        id: weatherBtn
+                        visible: root.weatherReady
+                        text: root.weatherIcon + " " + root.weatherTemp +
+                              "\u00B0(" + root.weatherFeelsLike + ")"
+                        color: root.weatherHex
+                        font.pixelSize: root.fontSize; font.family: root.fontFamily
+                        font.bold: true
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (root.weatherForecast.length === 0 && !weatherForecastProc.running) {
+                                    root._weatherJsonBuf = ""
+                                    weatherForecastProc.running = true
+                                }
+                                weatherPopup.visible = !weatherPopup.visible
+                            }
+                        }
+                    }
+                }
+
+                RowLayout {
+                    anchors.fill: parent
+                    spacing: root.pillSpacing
+
+                    // ======================
+                    // LEFT SECTION
+                    // ======================
+
+                    // ---- Workspaces pill ----
+                    Pill {
+                        innerSpacing: 2
+
+                        Repeater {
+                            model: bar.monitorWsIds
+
+                            delegate: Item {
+                                id: wsItem
+                                required property int modelData
+
+                                readonly property int  wsId:     modelData
+                                readonly property var  wsObj:    Hyprland.workspaces.values.find(function(ws) { return ws.id === wsId }) ?? null
+                                readonly property bool isFocused: bar.hyprMonitor !== null && bar.hyprMonitor.activeWorkspace !== null && bar.hyprMonitor.activeWorkspace.id === wsId
+                                readonly property bool hasWindows: wsObj !== null
+
+                                Layout.preferredWidth:  24
+                                Layout.preferredHeight: root.barHeight - root.pillVPad * 2
+
+                                // Highlight pill behind the active workspace number
+                                Rectangle {
+                                    visible: wsItem.isFocused
+                                    anchors.centerIn: parent
+                                    width:  20
+                                    height: 20
+                                    radius: 4
+                                    color:  Qt.rgba(
+                                        root.accentBlue.r,
+                                        root.accentBlue.g,
+                                        root.accentBlue.b,
+                                        0.2
+                                    )
+                                }
+
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: wsItem.wsId
+                                    font.pixelSize: root.fontSize
+                                    font.family:    root.fontFamily
+                                    font.bold:      wsItem.isFocused
+                                    color: wsItem.isFocused
+                                           ? root.accentBlue
+                                           : (wsItem.hasWindows ? root.fgColor : root.mutedColor)
+                                }
+
+                                // Dot indicator at the bottom for occupied (but unfocused) workspaces
+                                Rectangle {
+                                    visible: wsItem.hasWindows && !wsItem.isFocused
+                                    anchors.horizontalCenter: parent.horizontalCenter
+                                    anchors.bottom: parent.bottom
+                                    anchors.bottomMargin: 2
+                                    width:  4
+                                    height: 4
+                                    radius: 2
+                                    color:  root.accentMauve
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: Hyprland.dispatch("workspace " + wsItem.wsId)
+                                }
+                            }
+                        }
+                    }
+
+                    // ---- Window title pill ----
+                    Pill {
+                        Text {
+                            text: "\uF2D0 " + (root.activeWindowTitle.length > 0
+                                  ? root.activeWindowTitle
+                                  : "Desktop")
+                            color:           root.fgColor
+                            font.pixelSize:  root.fontSize
+                            font.family:     root.fontFamily
+                            elide:           Text.ElideRight
+                            maximumLineCount: 1
+                            Layout.maximumWidth: 300
+                        }
+                    }
+
+                    // ---- CPU + RAM pill ----
+                    Pill {
+                        innerSpacing: 8
+
+                        Text {
+                            text: "\uF4BC " + root.cpuPercent + "%"
+                            color: root.cpuPercent > 85 ? root.accentRed
+                                 : root.cpuPercent > 60 ? root.accentYellow
+                                 : root.accentTeal
+                            font.pixelSize: root.fontSize
+                            font.family:    root.fontFamily
+                        }
+
+                        Text {
+                            text: "\uF2DB " + root.ramGb.toFixed(1) + "G"
+                            color: root.ramGb > 16 ? root.accentRed
+                                 : root.ramGb > 8  ? root.accentYellow
+                                 : root.accentBlue
+                            font.pixelSize: root.fontSize
+                            font.family:    root.fontFamily
+                        }
+                    }
+
+                    // ======================
+                    // CENTER SECTION (spacer)
+                    // ======================
+                    Item { Layout.fillWidth: true }
+
+                    // ======================
+                    // RIGHT SECTION
+                    // ======================
+
+                    // ---- Audio pill (sink switch + volume) ----
+                    Pill {
+                        innerSpacing: 8
+
+                        Text {
+                            id: sinkSwitchBtn
+                            text: "\uF025"
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: audioMixerPopup.visible ? root.accentYellow : root.accentGreen
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: audioMixerPopup.visible = !audioMixerPopup.visible
+                            }
+                        }
+
+                        Item {
+                            id: volumeGroup
+                            implicitWidth: volRow.width
+                            implicitHeight: volRow.height
+
+                            Row {
+                                id: volRow
+                                spacing: 4
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Text {
+                                    id: speakerIcon
+                                    text: root.volumeMuted ? "\uF026" :
+                                          (root.volumeLevel > 66 ? "\uF028" :
+                                           root.volumeLevel > 33 ? "\uF027" : "\uF027")
+                                    font.pixelSize: root.fontSize
+                                    font.family: root.fontFamily
+                                    color: root.volumeMuted ? root.mutedColor : root.accentGreen
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: function(mouse) {
+                                            if (mouse.button === Qt.RightButton) {
+                                                if (root.defaultSink)
+                                                    root.defaultSink.audio.muted = !root.defaultSink.audio.muted
+                                            } else
+                                                audioMixerPopup.visible = !audioMixerPopup.visible
+                                        }
+                                    }
+                                }
+
+                                Text {
+                                    text: root.volumeMuted ? "mute" : root.volumeLevel + "%"
+                                    font.pixelSize: root.fontSize
+                                    font.family:    root.fontFamily
+                                    color: root.volumeMuted ? root.mutedColor : root.accentGreen
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: function(mouse) {
+                                            if (mouse.button === Qt.RightButton) {
+                                                if (root.defaultSink)
+                                                    root.defaultSink.audio.muted = !root.defaultSink.audio.muted
+                                            } else
+                                                audioMixerPopup.visible = !audioMixerPopup.visible
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Scroll-wheel volume control over the volume area
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.NoButton
+                                onWheel: function(wheel) {
+                                    if (!root.defaultSink) return
+                                    var step = root.volumeRaw < 0.1 ? 0.01 : 0.02
+                                    if (wheel.angleDelta.y > 0)
+                                        root.defaultSink.audio.volume = Math.min(1.0, root.volumeRaw + step)
+                                    else
+                                        root.defaultSink.audio.volume = Math.max(0, root.volumeRaw - step)
+                                }
+                            }
+                        }
+                    }
+
+                    // ---- Network pill ----
+                    Pill {
+                        Text {
+                            id: networkBtn
+                            text: networkPopup.btPower === "on" ? "\uF294" : "\uF293"
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: networkPopup.visible ? root.accentYellow
+                                 : networkPopup.btPower === "on" ? root.accentLavender
+                                 : root.mutedColor
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: networkPopup.visible = !networkPopup.visible
+                            }
+                        }
+                    }
+
+                    // ---- Screenshot pill ----
+                    Pill {
+                        Text {
+                            id: screenshotBtn
+                            text: "\uF030"
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: root.accentTeal
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: screenshotProc.running = true
+                            }
+                        }
+                    }
+
+                    // ---- System tray pill ----
+                    Pill {
+                        innerSpacing: 4
+
+                        Repeater {
+                            model: SystemTray.items.values
+
+                            delegate: Item {
+                                id: trayIcon
+                                required property var modelData
+                                required property int index
+                                Layout.preferredWidth:  20
+                                Layout.preferredHeight: 20
+
+                                // Icon image - prefer the icon provided by the item,
+                                // fall back to a named icon from the desktop theme.
+                                IconImage {
+                                    anchors.centerIn: parent
+                                    implicitSize: 16
+                                    source: trayIcon.modelData.icon
+                                    mipmap: true
+                                }
+
+                                // Context menu anchor (for right-click menus)
+                                QsMenuAnchor {
+                                    id: trayMenu
+                                    anchor.item: trayIcon
+                                    menu: trayIcon.modelData.menu
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: function(mouse) {
+                                        if (mouse.button === Qt.RightButton) {
+                                            if (trayIcon.modelData.hasMenu) {
+                                                trayMenu.open()
+                                            } else {
+                                                trayIcon.modelData.activate()
+                                            }
+                                        } else if (mouse.button === Qt.MiddleButton) {
+                                            trayIcon.modelData.secondaryActivate()
+                                        } else {
+                                            if (trayIcon.modelData.onlyMenu && trayIcon.modelData.hasMenu) {
+                                                trayMenu.open()
+                                            } else {
+                                                trayIcon.modelData.activate()
+                                            }
+                                        }
+                                    }
+                                    onWheel: function(wheel) {
+                                        trayIcon.modelData.scroll(wheel.angleDelta.y / 120, false)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // -------------------------------------------------------
+            // Weather forecast popup (native 5-day forecast)
+            // -------------------------------------------------------
+            PopupWindow {
+                id: weatherPopup
+                visible: false
+                grabFocus: true
+
+                anchor.window: bar
+                anchor.item: weatherBtn
+                anchor.edges: Edges.Bottom
+                anchor.gravity: Edges.Bottom
+                anchor.adjustment: PopupAdjustment.Slide
+
+                implicitWidth: weatherPopupContent.width
+                implicitHeight: weatherPopupContent.height
+
+                color: root.bgColor
+
+                Rectangle {
+                    id: weatherPopupContent
+                    width: 392
+                    height: forecastColumn.implicitHeight + 24
+                    color: root.bgColor
+                    border.color: root.mutedColor
+                    border.width: 1
+                    radius: 6
+
+                    Column {
+                        id: forecastColumn
+                        anchors.centerIn: parent
+                        width: parent.width - 24
+                        spacing: 8
+
+                        // ── Day selector tabs ──
+                        Row {
+                            spacing: 4
+
+                            Repeater {
+                                model: root.weatherForecast
+
+                                delegate: Rectangle {
+                                    required property var modelData
+                                    required property int index
+                                    width: 72; height: 52
+                                    radius: 4
+                                    color: index === root.weatherSelectedDay
+                                           ? root.mutedColor : "transparent"
+
+                                    Column {
+                                        anchors.centerIn: parent
+                                        spacing: 1
+
+                                        Text {
+                                            text: modelData.day || ""
+                                            color: root.fgColor
+                                            font.pixelSize: 13
+                                            font.family: root.fontFamily
+                                            font.bold: index === root.weatherSelectedDay
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                        Text {
+                                            text: modelData.icon || ""
+                                            font.pixelSize: 20
+                                            font.family: root.fontFamily
+                                            color: modelData.hex || root.fgColor
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                        Text {
+                                            text: Math.round(modelData.max) + "\u00B0/" +
+                                                  Math.round(modelData.min) + "\u00B0"
+                                            color: root.fgColor
+                                            font.pixelSize: 12
+                                            font.family: root.fontFamily
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.weatherSelectedDay = index
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Divider ──
+                        Rectangle {
+                            width: parent.width; height: 1
+                            color: root.mutedColor
+                        }
+
+                        // ── Selected day detail ──
+                        Column {
+                            spacing: 4
+                            visible: root.weatherForecast.length > 0
+
+                            property var day: root.weatherForecast[root.weatherSelectedDay] || {}
+
+                            Text {
+                                text: (parent.day.day || "") + "  " + (parent.day.date || "")
+                                color: root.fgColor
+                                font.pixelSize: 15
+                                font.family: root.fontFamily
+                                font.bold: true
+                            }
+
+                            Row {
+                                spacing: 16
+                                Text {
+                                    text: "\uE37D " + Math.round(parent.parent.day.wind || 0) + " km/h"
+                                    color: root.fgColor
+                                    font.pixelSize: 13; font.family: root.fontFamily
+                                }
+                                Text {
+                                    text: "\uE373 " + Math.round(parent.parent.day.humidity || 0) + "%"
+                                    color: root.fgColor
+                                    font.pixelSize: 13; font.family: root.fontFamily
+                                }
+                                Text {
+                                    text: "\uE371 " + Math.round(parent.parent.day.pop || 0) + "%"
+                                    color: root.fgColor
+                                    font.pixelSize: 13; font.family: root.fontFamily
+                                }
+                            }
+                        }
+
+                        // ── Divider ──
+                        Rectangle {
+                            width: parent.width; height: 1
+                            color: root.mutedColor
+                        }
+
+                        // ── Hourly forecast (scrollable) ──
+                        Flickable {
+                            width: parent.width
+                            height: 64
+                            contentWidth: hourlyRow.implicitWidth
+                            clip: true
+
+                            Row {
+                                id: hourlyRow
+                                spacing: 6
+
+                                Repeater {
+                                    model: (root.weatherForecast[root.weatherSelectedDay] || {}).hourly || []
+
+                                    delegate: Column {
+                                        required property var modelData
+                                        width: 44
+                                        spacing: 1
+
+                                        Text {
+                                            text: modelData.time || ""
+                                            color: root.mutedColor
+                                            font.pixelSize: 11; font.family: root.fontFamily
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                        Text {
+                                            text: modelData.icon || ""
+                                            font.pixelSize: 18; font.family: root.fontFamily
+                                            color: modelData.hex || root.fgColor
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                        Text {
+                                            text: Math.round(modelData.temp) + "\u00B0"
+                                            color: root.fgColor
+                                            font.pixelSize: 12; font.family: root.fontFamily
+                                            anchors.horizontalCenter: parent.horizontalCenter
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // ── Error / loading fallback ──
+                        Text {
+                            visible: root.weatherForecast.length === 0
+                            text: root.weatherError || "Loading forecast\u2026"
+                            color: root.fgColor
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                        }
+                    }
+                }
+            }
+
+            // -------------------------------------------------------
+            // Network popup (WiFi + Bluetooth)
+            // -------------------------------------------------------
+            NetworkPopup {
+                id: networkPopup
+                anchorWindow: bar
+                anchorItem: networkBtn
+
+                bgColor: root.bgColor
+                fgColor: root.fgColor
+                mutedColor: root.mutedColor
+                accentBlue: root.accentBlue
+                accentLavender: root.accentLavender
+                accentGreen: root.accentGreen
+                accentYellow: root.accentYellow
+                accentRed: root.accentRed
+                accentTeal: root.accentTeal
+                fontFamily: root.fontFamily
+                fontSize: root.fontSize
+            }
+
+            // -------------------------------------------------------
+            // Audio mixer popup (master + sinks + per-app streams)
+            // -------------------------------------------------------
+            AudioMixerPopup {
+                id: audioMixerPopup
+                anchorWindow: bar
+                anchorItem: speakerIcon
+
+                bgColor: root.bgColor
+                fgColor: root.fgColor
+                mutedColor: root.mutedColor
+                accentGreen: root.accentGreen
+                accentLavender: root.accentLavender
+                accentRed: root.accentRed
+                accentYellow: root.accentYellow
+                fontFamily: root.fontFamily
+                fontSize: root.fontSize
+            }
+        }
+    }
+
+    // ---------------------
+    // Gemini sidebar (auto-hide, left edge of DP-1)
+    // ---------------------
+    GeminiSidebar {
+        bgColor: root.bgColor
+        borderColor: root.mutedColor
+        targetScreen: "DP-1"
+    }
+}

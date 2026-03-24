@@ -1,0 +1,88 @@
+{ pkgs, ... }:
+
+{
+  programs.kitty = {
+    enable = true;
+
+    settings = {
+      # Font
+      font_family = "FiraCode Nerd Font";
+      font_size = 11;
+
+      # Cursor
+      cursor_shape = "beam";
+
+      # Scrollback
+      scrollback_lines = 10000;
+      scrollback_pager = "bat --paging=always";
+
+      # Window
+      window_padding_width = 8;
+      confirm_os_window_close = 0;
+      background_opacity = "0.95";
+
+      # Bell
+      enable_audio_bell = "no";
+
+      # Tab bar
+      tab_bar_style = "powerline";
+
+      # Layouts
+      enabled_layouts = "tall,stack,fat,grid";
+
+      # URL detection
+      url_style = "curly";
+
+      # Remote control
+      allow_remote_control = "socket-only";
+
+      # Shell integration
+      shell_integration = "enabled";
+
+      # Colors — Gruvbox Dark
+      foreground = "#ebdbb2";
+      background = "#282828";
+      cursor = "#d5c4a1";
+      selection_foreground = "#282828";
+      selection_background = "#d5c4a1";
+
+      # Black
+      color0 = "#282828";
+      color8 = "#928374";
+
+      # Red
+      color1 = "#cc241d";
+      color9 = "#fb4934";
+
+      # Green
+      color2 = "#98971a";
+      color10 = "#b8bb26";
+
+      # Yellow
+      color3 = "#d79921";
+      color11 = "#fabd2f";
+
+      # Blue
+      color4 = "#458588";
+      color12 = "#83a598";
+
+      # Magenta
+      color5 = "#b16286";
+      color13 = "#d3869b";
+
+      # Cyan
+      color6 = "#689d6a";
+      color14 = "#8ec07c";
+
+      # White
+      color7 = "#a89984";
+      color15 = "#ebdbb2";
+    };
+  };
+
+  # Companion packages
+  home.packages = with pkgs; [
+    bat
+    imagemagick
+  ];
+}
