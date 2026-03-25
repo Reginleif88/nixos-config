@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 # Target machine setup — run ONCE after first NixOS install
 # Handles items that can't be done before deployment:
-#   1. Generate hardware-configuration.nix for actual hardware
-#   2. Set up sops-nix age key and encrypt secrets (first-time only)
+#   1. Set up sops-nix age key and encrypt secrets (first-time only)
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-HARDWARE_CONF="$REPO_DIR/hosts/desktop/hardware-configuration.nix"
 SOPS_KEY_DIR="$HOME/.config/sops/age"
 SOPS_KEY_FILE="$SOPS_KEY_DIR/keys.txt"
 SOPS_YAML="$REPO_DIR/secrets/.sops.yaml"
@@ -15,18 +13,8 @@ SECRETS_FILE="$REPO_DIR/secrets/secrets.yaml"
 echo "=== NixOS Target Machine Setup ==="
 echo ""
 
-# ── Step 1: Generate hardware-configuration.nix ──────────────────────
-echo "[1/3] Generating hardware-configuration.nix..."
-
-if grep -q "Placeholder" "$HARDWARE_CONF" 2>/dev/null; then
-  sudo nixos-generate-config --show-hardware-config > "$HARDWARE_CONF"
-  echo "  ✓ Hardware config written to $HARDWARE_CONF"
-else
-  echo "  → Already generated (not a placeholder), skipping"
-fi
-
-# ── Step 2: Ensure age key exists ─────────────────────────────────────
-echo "[2/3] Checking age key..."
+# ── Step 1: Ensure age key exists ─────────────────────────────────────
+echo "[1/2] Checking age key..."
 
 ENCRYPTED_KEY="$REPO_DIR/secrets/keys.txt.age"
 
@@ -54,8 +42,8 @@ fi
 FRESH_SETUP="${FRESH_SETUP:-false}"
 AGE_PUB_KEY=$(grep "public key:" "$SOPS_KEY_FILE" | awk '{print $NF}')
 
-# ── Step 3: Set up secrets ────────────────────────────────────────────
-echo "[3/3] Setting up secrets..."
+# ── Step 2: Set up secrets ────────────────────────────────────────────
+echo "[2/2] Setting up secrets..."
 
 # Check if secrets.yaml is already encrypted (not a placeholder)
 if sops --config "$SOPS_YAML" -d "$SECRETS_FILE" > /dev/null 2>&1; then

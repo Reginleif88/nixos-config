@@ -2,14 +2,14 @@
 
 let
   system = "x86_64-linux";
-  quickshellWithWebEngine = inputs.quickshell.packages.${system}.default.withModules [
-    pkgs.qt6.qtwebengine
-  ];
+  # NOTE: qt6-webengine removed — it crashes quickshell on startup
+  # (FATAL: "Argument list is empty, the program name is not passed to QCoreApplication")
+  # GeminiSidebar is disabled until quickshell fixes WebEngine support
+  quickshellPkg = inputs.quickshell.packages.${system}.default;
 in
 {
-  # Quickshell via flake (with qt6-webengine for GeminiSidebar)
   home.packages = [
-    quickshellWithWebEngine
+    quickshellPkg
     inputs.elephant.packages.${system}.default
     pkgs.walker
     pkgs.grimblast
@@ -25,6 +25,9 @@ in
     source = ../dotfiles/quickshell/bar;
     recursive = true;
   };
+
+  # Walker launcher config
+  xdg.configFile."walker/config.toml".source = ../dotfiles/walker/config.toml;
 
   # Mako notification daemon (managed as systemd user service)
   services.mako.enable = true;

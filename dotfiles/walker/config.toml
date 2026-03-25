@@ -1,0 +1,16 @@
+[search]
+placeholder = "Search..."
+
+[list]
+max_entries = 50
+
+[activation_mode]
+labels = "jkl;asdf"
+
+[[plugins]]
+name = "applications"
+prefix = ""
+
+[[plugins]]
+name = "clipboard"
+prefix = "c:"

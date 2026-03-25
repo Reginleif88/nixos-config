@@ -14,9 +14,20 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    hyprland.url = "github:hyprwm/Hyprland";
+
+    hyprland-plugins = {
+      url = "github:hyprwm/hyprland-plugins";
+      inputs.hyprland.follows = "hyprland";
+    };
+
     dwproton.url = "github:imaviso/dwproton-flake";
 
-    quickshell.url = "github:quickshell-mirror/quickshell";
+    quickshell = {
+      url = "github:quickshell-mirror/quickshell";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
 
     zen-browser.url = "github:youwen5/zen-browser-flake";
 

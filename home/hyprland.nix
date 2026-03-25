@@ -1,11 +1,12 @@
-{ config, pkgs, ... }:
+{ config, pkgs, inputs, ... }:
 
 {
   # Hyprland user config — plugins only via home-manager, config via raw files
   wayland.windowManager.hyprland = {
     enable = true;
     plugins = [
-      pkgs.hyprlandPlugins.hyprbars
+      # TODO: re-enable when hyprland-plugins catches up to Hyprland 0.54.0
+      # inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprbars
     ];
     extraConfig = ''
       source = ~/.config/hypr/hyprland-custom.conf

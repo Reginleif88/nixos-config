@@ -104,15 +104,14 @@ nix-shell -p git sops age
 git clone https://github.com/Reginleif88/nixos-config.git ~/Documents/nixos-config
 cd ~/Documents/nixos-config
 
-./scripts/target-setup.sh          # generates hardware config and decrypts age key
+./scripts/target-setup.sh          # decrypts age key and sets up secrets
 sudo nixos-rebuild switch --flake .#desktop
 ```
 
 The `target-setup.sh` script handles:
 
-1. Generating `hardware-configuration.nix` for the actual hardware
-2. Decrypting the age key from `secrets/keys.txt.age` (you'll be prompted for the passphrase)
-3. Encrypting secrets with sops (first time only, skipped if already encrypted in repo)
+1. Decrypting the age key from `secrets/keys.txt.age` (you'll be prompted for the passphrase)
+2. Encrypting secrets with sops (first time only, skipped if already encrypted in repo)
 
 The age private key and encrypted secrets are both stored in the repo — the key is passphrase-protected, so you just need to remember one passphrase.
 

@@ -63,6 +63,7 @@
       RemainAfterExit = true;
     };
     script = ''
+      mkdir -p /var/lib/libvirt/images
       ${pkgs.libvirt}/bin/virsh pool-info default 2>/dev/null && exit 0
       ${pkgs.libvirt}/bin/virsh pool-define-as default dir --target /var/lib/libvirt/images
       ${pkgs.libvirt}/bin/virsh pool-start default

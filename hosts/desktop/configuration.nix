@@ -14,10 +14,11 @@
   ];
 
   # CachyOS kernel (BORE scheduler, sched-ext, BBRv3, x86-64-v3)
-  nixpkgs.overlays = [
-    inputs.nix-cachyos-kernel.overlays.pinned
-  ];
-  boot.kernelPackages = pkgs.cachyosKernels.linuxPackages_cachyos_bore;
+  # TODO: re-enable when lantian cache catches up
+  # nixpkgs.overlays = [
+  #   inputs.nix-cachyos-kernel.overlays.pinned
+  # ];
+  # boot.kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-bore;
 
   # Bootloader
   boot.loader.systemd-boot.enable = true;
@@ -51,7 +52,11 @@
   nix.settings = {
     experimental-features = [ "nix-command" "flakes" ];
     auto-optimise-store = true;
-    substituters = [ "https://attic.xuyh0120.win/lantian" ];
+    download-buffer-size = 268435456; # 256 MiB
+    substituters = [
+      "https://cache.nixos.org"
+      "https://attic.xuyh0120.win/lantian"
+    ];
     trusted-public-keys = [ "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=" ];
   };
 
@@ -81,5 +86,5 @@
     };
   };
 
-  system.stateVersion = "24.11";
+  system.stateVersion = "25.11";
 }

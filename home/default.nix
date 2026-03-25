@@ -15,7 +15,7 @@
 
   home.username = "reginleif88";
   home.homeDirectory = "/home/reginleif88";
-  home.stateVersion = "24.11";
+  home.stateVersion = "25.11";
 
   # XDG user directories
   xdg.userDirs = {

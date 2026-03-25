@@ -26,7 +26,7 @@ import Quickshell.Hyprland
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import Quickshell.Services.Pipewire
-import "sidebar"
+// import "sidebar"  // disabled: QtWebEngine crashes quickshell
 import "network"
 import "audio"
 
@@ -903,10 +903,13 @@ ShellRoot {
 
     // ---------------------
     // Gemini sidebar (auto-hide, left edge of DP-1)
+    // DISABLED: QtWebEngine crashes quickshell on startup
+    // (FATAL: "Argument list is empty, the program name is not passed to QCoreApplication")
+    // TODO: re-enable once quickshell fixes WebEngine argv[0] passthrough
     // ---------------------
-    GeminiSidebar {
-        bgColor: root.bgColor
-        borderColor: root.mutedColor
-        targetScreen: "DP-1"
-    }
+    // GeminiSidebar {
+    //     bgColor: root.bgColor
+    //     borderColor: root.mutedColor
+    //     targetScreen: "DP-1"
+    // }
 }
