@@ -24,6 +24,12 @@
       options = [ "fmask=0077" "dmask=0077" ];
     };
 
+  fileSystems."/run/media/reginleif88/Secondary" =
+    { device = "/dev/disk/by-uuid/1E0A4A850A4A59C3";
+      fsType = "ntfs-3g";
+      options = [ "nofail" "uid=1000" "gid=100" "dmask=022" "fmask=133" ];
+    };
+
   swapDevices =
     [ { device = "/dev/disk/by-uuid/14538ae5-99ed-40c8-bce0-923363ac4448"; }
     ];

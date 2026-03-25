@@ -2,8 +2,19 @@ name: Flake Update
 
 on:
   schedule:
-    - cron: "0 6 * * *" # Daily at 06:00 UTC
+    - cron: "0 8,20 * * *" # Every 12h at 08:00 and 20:00 UTC (10:00 and 22:00 Paris)
   workflow_dispatch: # Allow manual trigger
+
+concurrency:
+  group: flake-update
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   update:
@@ -30,4 +41,9 @@ jobs:
             git pull
             sudo nixos-rebuild switch --flake .#desktop
             ```
+
+            ## Disabled features to retry
+            - [ ] **hyprbars plugin** — uncomment in `home/hyprland.nix` (waiting for `hyprland-plugins` to support Hyprland 0.54.2+)
+            - [ ] **CachyOS kernel** — uncomment in `hosts/desktop/configuration.nix` (waiting for lantian cache to catch up)
+            - [ ] **winboat** — switch from AppImage overlay to `pkgs.winboat` in `home/apps.nix` + `overlays/default.nix` (waiting for Go cross-compilation fix in nixpkgs)
           delete-branch: true

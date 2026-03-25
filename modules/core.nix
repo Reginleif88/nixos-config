@@ -23,7 +23,11 @@
     gst_all_1.gst-plugins-bad
     gst_all_1.gst-plugins-ugly
     gst_all_1.gst-libav
+    ntfs3g
   ];
+
+  # NTFS support for mounting secondary drives
+  boot.supportedFilesystems = [ "ntfs" ];
 
   # Fonts
   fonts.packages = with pkgs; [
@@ -38,6 +42,9 @@
     monospace = [ "FiraCode Nerd Font" ];
   };
 
+  # PlatformIO udev rules for Arduino/ESP32 board access
+  services.udev.packages = [ pkgs.platformio-core ];
+
   # Flatpak with declarative package management via nix-flatpak
   services.flatpak = {
     enable = true;
@@ -47,18 +54,12 @@
         name = "flathub";
         location = "https://dl.flathub.org/repo/flathub.flatpakrepo";
       }
-      {
-        name = "nvidia";
-        location = "https://international.download.nvidia.com/GFNLinux/flatpak/";
-      }
     ];
 
     packages = [
       "com.spotify.Client"
       "com.stremio.Stremio"
       "io.podman_desktop.PodmanDesktop"
-
-      { appId = "com.nvidia.GeForceNOW"; origin = "nvidia"; }
     ];
   };
 }

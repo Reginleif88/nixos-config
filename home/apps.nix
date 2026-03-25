@@ -17,6 +17,8 @@ in
     android-tools
     scrcpy
     escrcpy
+    winboat
+    blueman
   ];
 
   # VS Code with PlatformIO extension
@@ -97,5 +99,6 @@ in
   xdg.configFile."xfce4" = {
     source = ../dotfiles/xfce4;
     recursive = true;
+    force = true;
   };
 }

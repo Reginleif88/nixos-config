@@ -23,4 +23,28 @@ final: prev: {
       cp -r ${appimageContents}/usr/share/icons $out/share/icons
     '';
   };
+
+  winboat = prev.appimageTools.wrapType2 {
+    pname = "winboat";
+    version = "0.9.0";
+    src = prev.fetchurl {
+      url = "https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-x86_64.AppImage";
+      sha256 = "1xhf15ryad3zbm3d34gaj8n88cmmr610naxp4r00xvidpnv24lnk";
+    };
+    extraInstallCommands = let
+      appimageContents = prev.appimageTools.extractType2 {
+        pname = "winboat";
+        version = "0.9.0";
+        src = prev.fetchurl {
+          url = "https://github.com/TibixDev/winboat/releases/download/v0.9.0/winboat-0.9.0-x86_64.AppImage";
+          sha256 = "1xhf15ryad3zbm3d34gaj8n88cmmr610naxp4r00xvidpnv24lnk";
+        };
+      };
+    in ''
+      install -m 444 -D ${appimageContents}/winboat.desktop $out/share/applications/winboat.desktop
+      substituteInPlace $out/share/applications/winboat.desktop \
+        --replace-warn 'Exec=AppRun' 'Exec=winboat'
+      cp -r ${appimageContents}/usr/share/icons $out/share/icons
+    '';
+  };
 }
