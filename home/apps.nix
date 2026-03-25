@@ -16,6 +16,7 @@ in
     jre
     android-tools
     scrcpy
+    escrcpy
   ];
 
   # VS Code with PlatformIO extension

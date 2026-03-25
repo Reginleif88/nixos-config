@@ -10,8 +10,7 @@ in
 {
   home.packages = [
     quickshellPkg
-    inputs.elephant.packages.${system}.default
-    pkgs.walker
+    pkgs.fuzzel
     pkgs.grimblast
     pkgs.cliphist
     pkgs.wl-clipboard
@@ -26,8 +25,6 @@ in
     recursive = true;
   };
 
-  # Walker launcher config
-  xdg.configFile."walker/config.toml".source = ../dotfiles/walker/config.toml;
 
   # Mako notification daemon (managed as systemd user service)
   services.mako.enable = true;

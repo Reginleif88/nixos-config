@@ -17,6 +17,14 @@
   home.homeDirectory = "/home/reginleif88";
   home.stateVersion = "25.11";
 
+  home.pointerCursor = {
+    name = "Bibata-Modern-Classic";
+    package = pkgs.bibata-cursors;
+    size = 24;
+    gtk.enable = true;
+    hyprcursor.enable = true;
+  };
+
   # XDG user directories
   xdg.userDirs = {
     enable = true;

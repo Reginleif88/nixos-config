@@ -28,6 +28,12 @@ user_pref("browser.urlbar.placeholderName.private", "Google");
 user_pref("zen.view.compact.enable-at-startup", false);
 user_pref("zen.view.use-single-toolbar", false);
 
+// Skip onboarding / first-run
+user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
+user_pref("browser.shell.checkDefaultBrowser", false);
+user_pref("datareporting.policy.dataSubmissionPolicyBypassNotification", true);
+user_pref("trailhead.firstrun.didSeeAboutWelcome", true);
+
 // Other
 user_pref("browser.contentblocking.category", "standard");
 user_pref("dom.forms.autocomplete.formautofill", true);

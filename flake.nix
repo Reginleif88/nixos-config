@@ -33,8 +33,6 @@
 
     claude-code.url = "github:sadjow/claude-code-nix";
 
-    elephant.url = "github:abenz1267/elephant";
-
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
@@ -53,7 +51,11 @@
         modules = [
           ./hosts/desktop
           inputs.nix-flatpak.nixosModules.nix-flatpak
-          { nixpkgs.overlays = [ inputs.nix-vscode-extensions.overlays.default ]; }
+          { nixpkgs.overlays = [
+              inputs.nix-vscode-extensions.overlays.default
+              (import ./overlays/default.nix)
+            ];
+          }
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
