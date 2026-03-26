@@ -14,11 +14,10 @@
   ];
 
   # CachyOS kernel (BORE scheduler, sched-ext, BBRv3, x86-64-v3)
-  # TODO: re-enable when lantian cache catches up
-  # nixpkgs.overlays = [
-  #   inputs.nix-cachyos-kernel.overlays.pinned
-  # ];
-  # boot.kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-bore;
+  nixpkgs.overlays = [
+    inputs.nix-cachyos-kernel.overlays.pinned
+  ];
+  boot.kernelPackages = pkgs.cachyosKernels.linuxPackages-cachyos-bore;
 
   # Bootloader
   boot.loader.systemd-boot.enable = true;

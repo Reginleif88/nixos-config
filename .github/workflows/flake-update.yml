@@ -44,6 +44,5 @@ jobs:
 
             ## Disabled features to retry
             - [ ] **hyprbars plugin** — uncomment in `home/hyprland.nix` (waiting for `hyprland-plugins` to support Hyprland 0.54.2+)
-            - [ ] **CachyOS kernel** — uncomment in `hosts/desktop/configuration.nix` (waiting for lantian cache to catch up)
             - [ ] **winboat** — switch from AppImage overlay to `pkgs.winboat` in `home/apps.nix` + `overlays/default.nix` (waiting for Go cross-compilation fix in nixpkgs)
           delete-branch: true
