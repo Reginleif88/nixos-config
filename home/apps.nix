@@ -19,6 +19,7 @@ in
     escrcpy
     winboat
     blueman
+    proton-vpn
   ];
 
   # VS Code with PlatformIO extension
@@ -51,6 +52,10 @@ in
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
+      "x-scheme-handler/http" = "zen.desktop";
+      "x-scheme-handler/https" = "zen.desktop";
+      "x-scheme-handler/about" = "zen.desktop";
+      "x-scheme-handler/unknown" = "zen.desktop";
       "text/plain" = "org.xfce.mousepad.desktop";
       "text/x-shellscript" = "org.xfce.mousepad.desktop";
       "text/x-python" = "org.xfce.mousepad.desktop";
@@ -58,7 +63,7 @@ in
       "text/x-chdr" = "org.xfce.mousepad.desktop";
       "text/x-c++src" = "org.xfce.mousepad.desktop";
       "text/x-c++hdr" = "org.xfce.mousepad.desktop";
-      "text/html" = "org.xfce.mousepad.desktop";
+      "text/html" = "zen.desktop";
       "text/xml" = "org.xfce.mousepad.desktop";
       "text/css" = "org.xfce.mousepad.desktop";
       "text/javascript" = "org.xfce.mousepad.desktop";

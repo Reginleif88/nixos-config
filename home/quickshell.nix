@@ -17,6 +17,7 @@ in
     pkgs.swayimg
     pkgs.networkmanager
     pkgs.bluez
+    pkgs.swaynotificationcenter
   ];
 
   # Place Quickshell config (recursive for entire bar directory)
@@ -25,7 +26,9 @@ in
     recursive = true;
   };
 
+  xdg.configFile."fuzzel/fuzzel.ini".source = ../dotfiles/fuzzel/fuzzel.ini;
 
-  # Mako notification daemon (managed as systemd user service)
-  services.mako.enable = true;
+  # SwayNC notification center config + Gruvbox theme
+  xdg.configFile."swaync/config.json".source = ../dotfiles/swaync/config.json;
+  xdg.configFile."swaync/style.css".source = ../dotfiles/swaync/style.css;
 }

@@ -29,6 +29,8 @@ import Quickshell.Services.Pipewire
 // import "sidebar"  // disabled: QtWebEngine crashes quickshell
 import "network"
 import "audio"
+import "vpn"
+import "sysmon"
 
 ShellRoot {
     id: root
@@ -464,21 +466,40 @@ ShellRoot {
                         innerSpacing: 8
 
                         Text {
+                            id: cpuText
                             text: "\uF4BC " + root.cpuPercent + "%"
-                            color: root.cpuPercent > 85 ? root.accentRed
+                            color: sysMonPopup.visible && sysMonPopup.activeTab === "cpu" ? root.accentYellow
+                                 : root.cpuPercent > 85 ? root.accentRed
                                  : root.cpuPercent > 60 ? root.accentYellow
                                  : root.accentTeal
                             font.pixelSize: root.fontSize
                             font.family:    root.fontFamily
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    sysMonPopup.activeTab = "cpu"
+                                    sysMonPopup.visible = !sysMonPopup.visible
+                                }
+                            }
                         }
 
                         Text {
                             text: "\uF2DB " + root.ramGb.toFixed(1) + "G"
-                            color: root.ramGb > 16 ? root.accentRed
+                            color: sysMonPopup.visible && sysMonPopup.activeTab === "ram" ? root.accentYellow
+                                 : root.ramGb > 16 ? root.accentRed
                                  : root.ramGb > 8  ? root.accentYellow
                                  : root.accentBlue
                             font.pixelSize: root.fontSize
                             font.family:    root.fontFamily
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    sysMonPopup.activeTab = "ram"
+                                    sysMonPopup.visible = !sysMonPopup.visible
+                                }
+                            }
                         }
                     }
 
@@ -590,6 +611,54 @@ ShellRoot {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: networkPopup.visible = !networkPopup.visible
+                            }
+                        }
+                    }
+
+                    // ---- VPN pill ----
+                    Pill {
+                        // Launch ProtonVPN GUI (right-click)
+                        Process {
+                            id: vpnGuiProc
+                            command: ["protonvpn-app"]
+                        }
+
+                        Text {
+                            id: vpnIcon
+                            text: "\uDB80\uDEE1"  // 󰛡 shield-lock
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: vpnPopup.visible ? root.accentYellow
+                                 : vpnPopup.vpnConnected ? root.accentGreen
+                                 : root.mutedColor
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.RightButton)
+                                        vpnGuiProc.running = true
+                                    else
+                                        vpnPopup.visible = !vpnPopup.visible
+                                }
+                            }
+                        }
+                        Text {
+                            visible: vpnPopup.vpnServer !== ""
+                            text: vpnPopup.vpnServer
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: root.accentGreen
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                acceptedButtons: Qt.LeftButton | Qt.RightButton
+                                onClicked: function(mouse) {
+                                    if (mouse.button === Qt.RightButton)
+                                        vpnGuiProc.running = true
+                                    else
+                                        vpnPopup.visible = !vpnPopup.visible
+                                }
                             }
                         }
                     }
@@ -860,6 +929,25 @@ ShellRoot {
             }
 
             // -------------------------------------------------------
+            // System monitor popup (top processes by CPU / RAM)
+            // -------------------------------------------------------
+            SysMonPopup {
+                id: sysMonPopup
+                anchorWindow: bar
+                anchorItem: cpuText
+
+                bgColor: root.bgColor
+                fgColor: root.fgColor
+                mutedColor: root.mutedColor
+                accentBlue: root.accentBlue
+                accentTeal: root.accentTeal
+                accentYellow: root.accentYellow
+                accentRed: root.accentRed
+                fontFamily: root.fontFamily
+                fontSize: root.fontSize
+            }
+
+            // -------------------------------------------------------
             // Network popup (WiFi + Bluetooth)
             // -------------------------------------------------------
             NetworkPopup {
@@ -872,6 +960,25 @@ ShellRoot {
                 mutedColor: root.mutedColor
                 accentBlue: root.accentBlue
                 accentLavender: root.accentLavender
+                accentGreen: root.accentGreen
+                accentYellow: root.accentYellow
+                accentRed: root.accentRed
+                accentTeal: root.accentTeal
+                fontFamily: root.fontFamily
+                fontSize: root.fontSize
+            }
+
+            // -------------------------------------------------------
+            // VPN popup (ProtonVPN status + quick connect)
+            // -------------------------------------------------------
+            VpnPopup {
+                id: vpnPopup
+                anchorWindow: bar
+                anchorItem: vpnIcon
+
+                bgColor: root.bgColor
+                fgColor: root.fgColor
+                mutedColor: root.mutedColor
                 accentGreen: root.accentGreen
                 accentYellow: root.accentYellow
                 accentRed: root.accentRed

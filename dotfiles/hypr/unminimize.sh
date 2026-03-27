@@ -46,9 +46,8 @@ icon_for() {
 # Get minimized windows from special:minimized workspace
 minimized=$(hyprctl clients -j | jq -c '.[] | select(.workspace.name == "special:minimized")')
 
-# Build display lines and address list
+# Build display lines: "address|icon  class: title"
 display=""
-addresses=""
 
 while IFS= read -r win; do
     [[ -z "$win" ]] && continue
@@ -59,25 +58,19 @@ while IFS= read -r win; do
 
     if [[ -n "$display" ]]; then
         display+=$'\n'
-        addresses+=$'\n'
     fi
-    display+="$icon  $class: $title"
-    addresses+="$addr"
+    display+="$addr|$icon  $class: $title"
 done <<< "$minimized"
 
-# Show picker — walker exits non-zero on cancel
-selected=$(echo "$display" | walker --dmenu --index --placeholder "Restore minimized window") || true
+# Show picker — fuzzel returns the selected line text
+selected=$(echo "$display" | fuzzel -d -p "Restore: ") || true
 
 if [[ -z "$selected" ]]; then
     exit 0
 fi
 
-# Look up address by index (walker --index is 0-based)
-addr=$(echo "$addresses" | sed -n "$((selected + 1))p")
-
-if [[ -z "$addr" ]]; then
-    exit 0
-fi
+# Extract address from the selected line
+addr="${selected%%|*}"
 
 # Get current workspace and move the window there
 ws=$(hyprctl activeworkspace -j | jq -r '.id')
