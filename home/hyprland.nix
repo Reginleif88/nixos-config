@@ -37,6 +37,12 @@ in
     executable = true;
   };
 
+  # Smart-close script: minimize tray-apps instead of killing them
+  home.file.".config/hypr/smart-close.sh" = {
+    source = ../dotfiles/hypr/smart-close.sh;
+    executable = true;
+  };
+
   # Enable hyprpolkitagent as a systemd user service
   systemd.user.services.hyprpolkitagent = {
     Unit.Description = "Hyprland Polkit Authentication Agent";

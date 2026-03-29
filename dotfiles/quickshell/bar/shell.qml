@@ -96,6 +96,125 @@ ShellRoot {
         Qt.resolvedUrl("scripts/weather.sh").toString().replace("file://", "")
 
     // ---------------------
+    // Mail (Proton Mail desktop) state
+    // ---------------------
+    readonly property color protonPurple: "#6D4AFF"  // Proton brand purple
+
+    property bool mailRunning: false
+    property int mailUnread: 0
+    property string mailAddress: ""
+    property string mailWorkspace: ""
+    property bool mailMinimized: false
+    property string _mailBuf: ""
+
+    readonly property string mailScript:
+        Qt.resolvedUrl("scripts/mail_panel.sh").toString().replace("file://", "")
+
+    Process {
+        id: mailStatusProc
+        command: ["bash", root.mailScript, "--status"]
+        stdout: SplitParser {
+            onRead: function(line) { root._mailBuf += line }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._mailBuf)
+                root.mailRunning = d.running || false
+                root.mailUnread = d.unread || 0
+                root.mailAddress = d.address || ""
+                root.mailWorkspace = d.workspace || ""
+                root.mailMinimized = d.workspace === "special:minimized"
+            } catch(e) {}
+            root._mailBuf = ""
+        }
+    }
+
+    Process {
+        id: mailToggleProc
+        command: ["bash", root.mailScript, "--toggle"]
+        onExited: function() {
+            // Quick re-poll to update state after toggle
+            mailPostToggleTimer.restart()
+        }
+    }
+
+    // Delay re-poll slightly so hyprctl state settles
+    Timer {
+        id: mailPostToggleTimer
+        interval: 300
+        onTriggered: mailStatusProc.running = true
+    }
+
+    // Fast poll at startup (every 2s for the first 30s) then settle to 15s
+    property int _mailPollCount: 0
+
+    Timer {
+        id: mailPollTimer
+        interval: root._mailPollCount < 15 ? 2000 : 15000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            root._mailPollCount++
+            mailStatusProc.running = true
+        }
+    }
+
+    // ---------------------
+    // Obsidian state
+    // ---------------------
+    readonly property color obsidianPurple: "#7C3AED"  // Obsidian brand purple
+
+    property bool obsRunning: false
+    property bool obsMinimized: false
+    property string _obsBuf: ""
+
+    readonly property string trayScript:
+        Qt.resolvedUrl("scripts/tray_pill.sh").toString().replace("file://", "")
+
+    Process {
+        id: obsStatusProc
+        command: ["bash", root.trayScript, "--status", "--class", "obsidian"]
+        stdout: SplitParser {
+            onRead: function(line) { root._obsBuf += line }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._obsBuf)
+                root.obsRunning = d.running || false
+                root.obsMinimized = d.workspace === "special:minimized"
+            } catch(e) {}
+            root._obsBuf = ""
+        }
+    }
+
+    Process {
+        id: obsToggleProc
+        command: ["bash", root.trayScript, "--toggle", "--class", "obsidian", "--launch", "obsidian"]
+        onExited: function() { obsPostToggleTimer.restart() }
+    }
+
+    Timer {
+        id: obsPostToggleTimer
+        interval: 300
+        onTriggered: obsStatusProc.running = true
+    }
+
+    property int _obsPollCount: 0
+
+    Timer {
+        id: obsPollTimer
+        interval: root._obsPollCount < 15 ? 2000 : 15000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            root._obsPollCount++
+            obsStatusProc.running = true
+        }
+    }
+
+    // ---------------------
     // Notification center (SwayNC) state
     // ---------------------
     property int notifCount: 0
@@ -795,6 +914,74 @@ ShellRoot {
                                     else
                                         vpnPopup.visible = !vpnPopup.visible
                                 }
+                            }
+                        }
+                    }
+
+                    // ---- Mail pill (Proton Mail) ----
+                    Pill {
+                        Item {
+                            Layout.preferredWidth: mailIcon.width
+                            Layout.preferredHeight: mailIcon.height
+
+                            Text {
+                                id: mailIcon
+                                // Open envelope when visible, closed when minimized/off
+                                text: root.mailRunning && !root.mailMinimized
+                                    ? "\uF2B6"   // nf-fa-envelope_open
+                                    : "\uF0E0"   // nf-fa-envelope
+                                font.pixelSize: root.fontSize
+                                font.family: root.fontFamily
+                                color: root.mailUnread > 0 ? root.accentRed
+                                     : root.mailRunning ? root.protonPurple
+                                     : root.mutedColor
+                            }
+
+                            // Unread dot badge
+                            Rectangle {
+                                visible: root.mailUnread > 0
+                                width: 7; height: 7; radius: 3.5
+                                color: root.accentRed
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.topMargin: -2
+                                anchors.rightMargin: -2
+                            }
+
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: mailToggleProc.running = true
+                            }
+                        }
+                        Text {
+                            visible: root.mailUnread > 0
+                            text: root.mailUnread.toString()
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: root.accentRed
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: mailToggleProc.running = true
+                            }
+                        }
+                    }
+
+                    // ---- Obsidian pill ----
+                    Pill {
+                        Text {
+                            id: obsIcon
+                            text: "\uDB05\uDCE7"  // 󱓧 nf-md-crystal_ball (Obsidian)
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: root.obsRunning ? root.obsidianPurple
+                                 : root.mutedColor
+                            opacity: root.obsRunning && root.obsMinimized ? 0.6 : 1.0
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: obsToggleProc.running = true
                             }
                         }
                     }
