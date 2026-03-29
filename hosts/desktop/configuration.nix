@@ -132,5 +132,37 @@
     '';
   };
 
+  # Disable unwanted ALSA audio devices (NVIDIA GPU HDMI, Corsair ST100)
+  services.pipewire.wireplumber.extraConfig."51-disable-unwanted-audio" = {
+    "monitor.alsa.rules" = [
+      {
+        matches = [
+          { "device.description" = "~GP104.*"; }
+          { "device.description" = "~.*ST100.*"; }
+        ];
+        actions = {
+          "update-props" = {
+            "device.disabled" = true;
+          };
+        };
+      }
+    ];
+  };
+
+  # Auto-connect Edifier R1280DBs on login
+  systemd.user.services.bt-connect-edifier = {
+    description = "Auto-connect Edifier R1280DBs Bluetooth speaker";
+    after = [ "bluetooth.target" ];
+    wants = [ "bluetooth.target" ];
+    wantedBy = [ "default.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.bluez}/bin/bluetoothctl connect 08:F0:B6:51:73:7E";
+      Restart = "on-failure";
+      RestartSec = 5;
+      RestartMaxDelaySec = 30;
+    };
+  };
+
   system.stateVersion = "25.11";
 }

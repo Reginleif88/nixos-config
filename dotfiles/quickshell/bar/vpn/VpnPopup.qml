@@ -5,7 +5,7 @@ import Quickshell.Wayland
 import Quickshell.Io
 
 // ProtonVPN status popup for Quickshell bar
-// Shows connection status, server details, and quick connect/disconnect
+// Shows connection status, server details, and disconnect control
 
 PopupWindow {
     id: popup
@@ -107,26 +107,6 @@ PopupWindow {
     // Action processes
     // ─────────────────────────────────────────────────────
     Process {
-        id: vpnQuickConnectProc
-        command: ["bash", popup.scriptsDir + "vpn_panel.sh", "--quick"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._statusBuf += line }
-        }
-        onExited: function() {
-            popup.actionBusy = false
-            try {
-                var d = JSON.parse(popup._statusBuf)
-                popup.connectedInfo = d.connected || null
-                popup.vpnConnected = d.connected !== null && d.connected !== undefined
-                popup.vpnServer = popup.vpnConnected ? (d.connected.name || "") : ""
-                popup.vpnCountry = popup.vpnConnected ? (d.connected.country || "") : ""
-                popup.profiles = d.profiles || []
-            } catch(e) {}
-            popup._statusBuf = ""
-        }
-    }
-
-    Process {
         id: vpnConnectProc
         property string targetProfile: ""
         command: ["bash", popup.scriptsDir + "vpn_panel.sh", "--connect", targetProfile]
@@ -216,12 +196,11 @@ PopupWindow {
                 width: parent.width
                 spacing: 8
 
-                Text {
-                    text: "\uDB80\uDEE1"  // 󰛡 shield-lock (nerd font)
-                    font.pixelSize: popup.fontSize + 2
-                    font.family: popup.fontFamily
-                    color: popup.vpnConnected ? popup.accentGreen : popup.mutedColor
+                Image {
+                    source: "proton-vpn-logo.svg"
+                    sourceSize: Qt.size(popup.fontSize + 4, popup.fontSize + 4)
                     anchors.verticalCenter: parent.verticalCenter
+                    opacity: popup.vpnConnected ? 1.0 : 0.5
                 }
 
                 Text {
@@ -235,28 +214,25 @@ PopupWindow {
 
                 Item { width: 1; height: 1; Layout.fillWidth: true }
 
-                // Quick connect / disconnect button
+                // Disconnect button (only visible when connected)
                 Rectangle {
+                    visible: popup.vpnConnected || popup.actionBusy
                     width: btnText.width + 16
                     height: 24
                     radius: 4
                     anchors.verticalCenter: parent.verticalCenter
                     color: popup.actionBusy
                            ? Qt.rgba(popup.mutedColor.r, popup.mutedColor.g, popup.mutedColor.b, 0.3)
-                           : popup.vpnConnected
-                             ? Qt.rgba(popup.accentRed.r, popup.accentRed.g, popup.accentRed.b, 0.2)
-                             : Qt.rgba(popup.accentGreen.r, popup.accentGreen.g, popup.accentGreen.b, 0.2)
+                           : Qt.rgba(popup.accentRed.r, popup.accentRed.g, popup.accentRed.b, 0.2)
 
                     Text {
                         id: btnText
                         anchors.centerIn: parent
-                        text: popup.actionBusy ? "\u2026"
-                            : popup.vpnConnected ? "Disconnect" : "Quick Connect"
+                        text: popup.actionBusy ? "\u2026" : "Disconnect"
                         font.pixelSize: popup.fontSize - 2
                         font.family: popup.fontFamily
                         font.bold: true
-                        color: popup.actionBusy ? popup.mutedColor
-                             : popup.vpnConnected ? popup.accentRed : popup.accentGreen
+                        color: popup.actionBusy ? popup.mutedColor : popup.accentRed
                     }
 
                     MouseArea {
@@ -265,17 +241,13 @@ PopupWindow {
                         onClicked: {
                             if (popup.actionBusy) return
                             popup.actionBusy = true
-                            if (popup.vpnConnected) {
-                                popup.disconnectPending = true
-                                popup.connectedInfo = null
-                                popup.vpnConnected = false
-                                popup.vpnServer = ""
-                                popup.vpnCountry = ""
-                                disconnectPendingReset.restart()
-                                vpnDisconnectProc.running = true
-                            } else {
-                                vpnQuickConnectProc.running = true
-                            }
+                            popup.disconnectPending = true
+                            popup.connectedInfo = null
+                            popup.vpnConnected = false
+                            popup.vpnServer = ""
+                            popup.vpnCountry = ""
+                            disconnectPendingReset.restart()
+                            vpnDisconnectProc.running = true
                         }
                     }
                 }
@@ -399,13 +371,19 @@ PopupWindow {
                             }
                             spacing: 8
 
+                            Image {
+                                source: "proton-vpn-logo.svg"
+                                sourceSize: Qt.size(popup.fontSize, popup.fontSize)
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+
                             Text {
-                                text: "\uDB80\uDEE1  " + modelData.name
+                                text: modelData.name
                                 font.pixelSize: popup.fontSize
                                 font.family: popup.fontFamily
                                 color: popup.fgColor
                                 elide: Text.ElideRight
-                                width: parent.width - profileProtoText.width - profileActionBtn.width - 24
+                                width: parent.width - profileProtoText.width - profileActionBtn.width - 40
                                 anchors.verticalCenter: parent.verticalCenter
                             }
 
@@ -470,12 +448,23 @@ PopupWindow {
                        ? Qt.rgba(popup.accentTeal.r, popup.accentTeal.g, popup.accentTeal.b, 0.15)
                        : "transparent"
 
-                Text {
+                Row {
                     anchors.centerIn: parent
-                    text: "\uDB80\uDEE1  Open ProtonVPN"
-                    font.pixelSize: popup.fontSize
-                    font.family: popup.fontFamily
-                    color: popup.accentTeal
+                    spacing: 6
+
+                    Image {
+                        source: "proton-vpn-logo.svg"
+                        sourceSize: Qt.size(popup.fontSize, popup.fontSize)
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                        text: "Open ProtonVPN"
+                        font.pixelSize: popup.fontSize
+                        font.family: popup.fontFamily
+                        color: popup.accentTeal
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
 
                 MouseArea {

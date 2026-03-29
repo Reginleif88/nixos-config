@@ -136,25 +136,6 @@ build_status() {
         '{"connected":$connected,"profiles":$profiles}'
 }
 
-# ── Quick connect ─────────────────────────────────────────────────
-quick_connect() {
-    # Bring up the most recent VPN profile via nmcli
-    local profile
-    profile=$(nmcli -t -f NAME,TYPE con show 2>/dev/null \
-        | grep -E ':(wireguard|vpn)$' \
-        | grep -iv 'ipv6leak\|killswitch' \
-        | head -1 | cut -d: -f1)
-
-    if [[ -n "$profile" ]]; then
-        nmcli con up "$profile" 2>/dev/null || true
-        sleep 2
-    fi
-
-    # Invalidate IP cache
-    rm -f "$CACHE_DIR/vpn_ip" 2>/dev/null || true
-    build_status
-}
-
 # ── Connect to specific profile ───────────────────────────────────
 connect_profile() {
     local name="$1"
@@ -184,7 +165,6 @@ disconnect_vpn() {
 case "${1:---status}" in
     --status)       build_status ;;
     --connect)      connect_profile "${2:?Profile name required}" ;;
-    --quick)        quick_connect ;;
     --disconnect)   disconnect_vpn ;;
     *)              echo '{"error":"Unknown command"}' ;;
 esac

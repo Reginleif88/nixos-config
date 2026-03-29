@@ -1,0 +1,33 @@
+{
+  "permissions": {
+    "allow": [
+      "Grep",
+      "Glob",
+      "Edit",
+      "Write",
+      "Agent",
+      "WebFetch(*)",
+      "WebSearch",
+      "Read(*)",
+      "Bash(git *)",
+      "Bash(nix *)",
+      "Bash(ls *)",
+      "Bash(which *)",
+      "Bash(type *)",
+      "Bash(gh *)",
+      "Bash(hyprctl *)",
+      "Bash(systemctl --user *)",
+      "Bash(flatpak *)",
+      "Bash(bluetoothctl *)",
+      "Bash(quickshell *)",
+      "Bash(readelf *)",
+      "Bash(nm *)",
+      "Bash(objdump *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(xargs *)",
+      "Bash(nix-prefetch-fetchFromGitHub *)"
+    ],
+    "defaultMode": "default"
+  }
+}

@@ -18,8 +18,10 @@ in
     scrcpy
     escrcpy
     winboat
+    ascii-vault
     blueman
     proton-vpn
+    protonmail-desktop
   ];
 
   # VS Code with PlatformIO extension

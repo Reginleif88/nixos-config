@@ -12,6 +12,14 @@ in
     inputs.claude-code.packages.${system}.default
   ];
 
+  # Claude Code global settings + permissions
+  home.file.".claude/settings.json".source = ../dotfiles/claude/settings.json;
+  home.file.".claude/settings.local.json".source = ../dotfiles/claude/settings.local.json;
+  home.file.".claude/statusline.sh" = {
+    source = ../dotfiles/claude/statusline.sh;
+    executable = true;
+  };
+
   # direnv for per-project Node/tooling versions
   programs.direnv = {
     enable = true;

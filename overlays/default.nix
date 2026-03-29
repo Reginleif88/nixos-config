@@ -1,5 +1,13 @@
 # Custom package overlays
+{ ascii-vault-src, ... }:
 final: prev: {
+  ascii-vault = prev.rustPlatform.buildRustPackage {
+    pname = "ascii-vault";
+    version = "1.0.0";
+    src = ascii-vault-src;
+    cargoHash = "sha256-+j+Si7Uafg6dv/emPtEhQxJoKz0ti9ibaRgugFM35HA=";
+  };
+
   escrcpy = prev.appimageTools.wrapType2 {
     pname = "escrcpy";
     version = "2.6.2";

@@ -49,7 +49,7 @@ PopupWindow {
     // Internal state
     // ─────────────────────────────────────────────────────
     property string activeTab: "bt"      // "bt" or "wifi"
-    readonly property color activeAccent: activeTab === "wifi" ? popup.accentBlue : popup.accentLavender
+    readonly property color activeAccent: popup.accentBlue
 
     // Bluetooth state
     property var btConnected: []
@@ -121,16 +121,17 @@ PopupWindow {
         }
     }
 
-    // Poll every 3 seconds when visible
+    // Fast poll when popup is open, slow background poll for bar icon state
     Timer {
         id: pollTimer
-        interval: 3000
-        running: popup.visible
+        interval: popup.visible ? 3000 : 15000
+        running: true
         repeat: true
         triggeredOnStart: true
         onTriggered: {
             btStatusProc.running = true
-            wifiStatusProc.running = true
+            if (popup.visible)
+                wifiStatusProc.running = true
         }
     }
 
@@ -278,7 +279,7 @@ PopupWindow {
                     height: 28
                     radius: 4
                     color: popup.activeTab === "bt"
-                           ? Qt.rgba(popup.accentLavender.r, popup.accentLavender.g, popup.accentLavender.b, 0.2)
+                           ? Qt.rgba(popup.accentBlue.r, popup.accentBlue.g, popup.accentBlue.b, 0.2)
                            : "transparent"
 
                     Text {
@@ -287,7 +288,7 @@ PopupWindow {
                         font.pixelSize: popup.fontSize
                         font.family: popup.fontFamily
                         font.bold: popup.activeTab === "bt"
-                        color: popup.activeTab === "bt" ? popup.accentLavender : popup.fgColor
+                        color: popup.activeTab === "bt" ? popup.accentBlue : popup.fgColor
                     }
 
                     MouseArea {
@@ -399,7 +400,7 @@ PopupWindow {
                         width: parent.width
                         height: btConnCol.height + 12
                         radius: 4
-                        color: Qt.rgba(popup.accentLavender.r, popup.accentLavender.g, popup.accentLavender.b, 0.1)
+                        color: Qt.rgba(popup.accentBlue.r, popup.accentBlue.g, popup.accentBlue.b, 0.1)
 
                         Column {
                             id: btConnCol
@@ -415,7 +416,7 @@ PopupWindow {
                                 font.pixelSize: popup.fontSize
                                 font.family: popup.fontFamily
                                 font.bold: true
-                                color: popup.accentLavender
+                                color: popup.accentBlue
                                 elide: Text.ElideRight
                                 width: parent.width
                             }
@@ -517,7 +518,7 @@ PopupWindow {
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 font.bold: true
-                                color: popup.accentLavender
+                                color: popup.accentBlue
                                 anchors.verticalCenter: parent.verticalCenter
                             }
                         }

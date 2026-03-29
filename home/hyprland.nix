@@ -1,13 +1,21 @@
 { config, pkgs, inputs, ... }:
 
+let
+  hyprlandPkg = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
+  gruvbar = pkgs.stdenv.mkDerivation {
+    pname = "gruvbar";
+    version = "0.1";
+    src = ../plugins/gruvbar;
+    nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ] ++ hyprlandPkg.nativeBuildInputs;
+    buildInputs = [ hyprlandPkg ] ++ hyprlandPkg.buildInputs;
+  };
+in
 {
-  # Hyprland user config — plugins only via home-manager, config via raw files
+  # Hyprland user config
   wayland.windowManager.hyprland = {
     enable = true;
-    plugins = [
-      # TODO: re-enable when hyprland-plugins catches up to Hyprland 0.54.2
-      # inputs.hyprland-plugins.packages.${pkgs.stdenv.hostPlatform.system}.hyprbars
-    ];
+    package = hyprlandPkg;
+    plugins = [ gruvbar ];
     extraConfig = ''
       source = ~/.config/hypr/hyprland-custom.conf
     '';

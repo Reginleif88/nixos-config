@@ -38,6 +38,11 @@
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
 
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
+
+    ascii-vault = {
+      url = "github:lorediggia/ascii-vault";
+      flake = false;
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
@@ -53,7 +58,7 @@
           inputs.nix-flatpak.nixosModules.nix-flatpak
           { nixpkgs.overlays = [
               inputs.nix-vscode-extensions.overlays.default
-              (import ./overlays/default.nix)
+              (import ./overlays/default.nix { ascii-vault-src = inputs.ascii-vault; })
             ];
           }
           home-manager.nixosModules.home-manager

@@ -31,6 +31,7 @@ import "network"
 import "audio"
 import "vpn"
 import "sysmon"
+import "music"
 
 ShellRoot {
     id: root
@@ -93,6 +94,40 @@ ShellRoot {
     property string _weatherJsonBuf: ""
     readonly property string weatherScript:
         Qt.resolvedUrl("scripts/weather.sh").toString().replace("file://", "")
+
+    // ---------------------
+    // Notification center (SwayNC) state
+    // ---------------------
+    property int notifCount: 0
+    property bool dndEnabled: false
+
+    Process {
+        id: notifSubscribeProc
+        running: true
+        command: ["swaync-client", "--subscribe-waybar"]
+        stdout: SplitParser {
+            onRead: function(line) {
+                try {
+                    var d = JSON.parse(line)
+                    root.notifCount = parseInt(d.text) || 0
+                    root.dndEnabled = (d.alt || "").indexOf("dnd") !== -1
+                } catch(e) {}
+            }
+        }
+        onExited: function() { notifRestartTimer.running = true }
+    }
+
+    // Restart subscribe if it exits unexpectedly
+    Timer {
+        id: notifRestartTimer
+        interval: 3000
+        onTriggered: notifSubscribeProc.running = true
+    }
+
+    Process {
+        id: notifToggleProc
+        command: ["swaync-client", "-t"]
+    }
 
     // ---------------------
     // Track all PipeWire nodes for full property access
@@ -337,9 +372,14 @@ ShellRoot {
                     rightMargin:  root.barSideMargin
                 }
 
-                // True-centered clock + weather pill
+                // Clock + weather pill: true-centered, shifts right if left pills overlap
                 Pill {
-                    anchors.centerIn: parent
+                    id: clockPill
+                    anchors.verticalCenter: parent.verticalCenter
+                    x: Math.max(
+                        (parent.width - width) / 2,
+                        musicPill.x + musicPill.width + root.pillSpacing
+                    )
                     z: 1
                     innerSpacing: 16
 
@@ -503,6 +543,45 @@ ShellRoot {
                         }
                     }
 
+                    // ---- Music pill (MPRIS media controls) ----
+                    Pill {
+                        id: musicPill
+
+                        Text {
+                            id: musicIcon
+                            text: "\uF001"
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: musicPopup.visible ? root.accentYellow
+                                 : musicPopup.playerStatus === "Playing" ? root.accentGreen
+                                 : root.mutedColor
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: musicPopup.visible = !musicPopup.visible
+                            }
+                        }
+
+                        Text {
+                            visible: musicPopup.trackArtist !== "" || musicPopup.trackTitle !== ""
+                            text: {
+                                var info = ""
+                                if (musicPopup.trackArtist !== "")
+                                    info = musicPopup.trackArtist + " - "
+                                info += musicPopup.trackTitle
+                                return info.length > 30 ? info.substring(0, 28) + "\u2026" : info
+                            }
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: musicPopup.playerStatus === "Playing" ? root.accentGreen : root.mutedColor
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: musicPopup.visible = !musicPopup.visible
+                            }
+                        }
+                    }
+
                     // ======================
                     // CENTER SECTION (spacer)
                     // ======================
@@ -511,6 +590,62 @@ ShellRoot {
                     // ======================
                     // RIGHT SECTION
                     // ======================
+
+                    // ---- System tray pill ----
+                    Pill {
+                        innerSpacing: 4
+
+                        Repeater {
+                            model: SystemTray.items.values
+
+                            delegate: Item {
+                                id: trayIcon
+                                required property var modelData
+                                required property int index
+                                Layout.preferredWidth:  20
+                                Layout.preferredHeight: 20
+
+                                IconImage {
+                                    anchors.centerIn: parent
+                                    implicitSize: 16
+                                    source: trayIcon.modelData.icon
+                                    mipmap: true
+                                }
+
+                                QsMenuAnchor {
+                                    id: trayMenu
+                                    anchor.item: trayIcon
+                                    menu: trayIcon.modelData.menu
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: function(mouse) {
+                                        if (mouse.button === Qt.RightButton) {
+                                            if (trayIcon.modelData.hasMenu) {
+                                                trayMenu.open()
+                                            } else {
+                                                trayIcon.modelData.activate()
+                                            }
+                                        } else if (mouse.button === Qt.MiddleButton) {
+                                            trayIcon.modelData.secondaryActivate()
+                                        } else {
+                                            if (trayIcon.modelData.onlyMenu && trayIcon.modelData.hasMenu) {
+                                                trayMenu.open()
+                                            } else {
+                                                trayIcon.modelData.activate()
+                                            }
+                                        }
+                                    }
+                                    onWheel: function(wheel) {
+                                        trayIcon.modelData.scroll(wheel.angleDelta.y / 120, false)
+                                    }
+                                }
+                            }
+                        }
+                    }
 
                     // ---- Audio pill (sink switch + volume) ----
                     Pill {
@@ -605,7 +740,8 @@ ShellRoot {
                             font.pixelSize: root.fontSize
                             font.family: root.fontFamily
                             color: networkPopup.visible ? root.accentYellow
-                                 : networkPopup.btPower === "on" ? root.accentLavender
+                                 : networkPopup.btConnected.length > 0 ? root.accentGreen
+                                 : networkPopup.btPower === "on" ? root.accentBlue
                                  : root.mutedColor
                             MouseArea {
                                 anchors.fill: parent
@@ -625,7 +761,7 @@ ShellRoot {
 
                         Text {
                             id: vpnIcon
-                            text: "\uDB80\uDEE1"  // 󰛡 shield-lock
+                            text: "\uDB81\uDC83"  // 󰒃 nf-md-lock
                             font.pixelSize: root.fontSize
                             font.family: root.fontFamily
                             color: vpnPopup.visible ? root.accentYellow
@@ -679,61 +815,37 @@ ShellRoot {
                         }
                     }
 
-                    // ---- System tray pill ----
+                    // ---- Notification bell pill ----
                     Pill {
-                        innerSpacing: 4
+                        Item {
+                            Layout.preferredWidth: notifBellText.width
+                            Layout.preferredHeight: notifBellText.height
 
-                        Repeater {
-                            model: SystemTray.items.values
+                            Text {
+                                id: notifBellText
+                                text: root.dndEnabled ? "\uF1F6"   // fa-bell-slash
+                                    : root.notifCount > 0 ? "\uF0F3" // fa-bell (active)
+                                    : "\uF0A2"                       // fa-bell-o (empty)
+                                font.pixelSize: root.fontSize
+                                font.family: root.fontFamily
+                                color: root.notifCount > 0 ? root.accentYellow : root.mutedColor
+                            }
 
-                            delegate: Item {
-                                id: trayIcon
-                                required property var modelData
-                                required property int index
-                                Layout.preferredWidth:  20
-                                Layout.preferredHeight: 20
+                            // Unread dot
+                            Rectangle {
+                                visible: root.notifCount > 0 && !root.dndEnabled
+                                width: 7; height: 7; radius: 3.5
+                                color: root.accentRed
+                                anchors.top: parent.top
+                                anchors.right: parent.right
+                                anchors.topMargin: -2
+                                anchors.rightMargin: -2
+                            }
 
-                                // Icon image - prefer the icon provided by the item,
-                                // fall back to a named icon from the desktop theme.
-                                IconImage {
-                                    anchors.centerIn: parent
-                                    implicitSize: 16
-                                    source: trayIcon.modelData.icon
-                                    mipmap: true
-                                }
-
-                                // Context menu anchor (for right-click menus)
-                                QsMenuAnchor {
-                                    id: trayMenu
-                                    anchor.item: trayIcon
-                                    menu: trayIcon.modelData.menu
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: function(mouse) {
-                                        if (mouse.button === Qt.RightButton) {
-                                            if (trayIcon.modelData.hasMenu) {
-                                                trayMenu.open()
-                                            } else {
-                                                trayIcon.modelData.activate()
-                                            }
-                                        } else if (mouse.button === Qt.MiddleButton) {
-                                            trayIcon.modelData.secondaryActivate()
-                                        } else {
-                                            if (trayIcon.modelData.onlyMenu && trayIcon.modelData.hasMenu) {
-                                                trayMenu.open()
-                                            } else {
-                                                trayIcon.modelData.activate()
-                                            }
-                                        }
-                                    }
-                                    onWheel: function(wheel) {
-                                        trayIcon.modelData.scroll(wheel.angleDelta.y / 120, false)
-                                    }
-                                }
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: notifToggleProc.running = true
                             }
                         }
                     }
@@ -969,7 +1081,7 @@ ShellRoot {
             }
 
             // -------------------------------------------------------
-            // VPN popup (ProtonVPN status + quick connect)
+            // VPN popup (ProtonVPN status + disconnect)
             // -------------------------------------------------------
             VpnPopup {
                 id: vpnPopup
@@ -1002,6 +1114,24 @@ ShellRoot {
                 accentLavender: root.accentLavender
                 accentRed: root.accentRed
                 accentYellow: root.accentYellow
+                fontFamily: root.fontFamily
+                fontSize: root.fontSize
+            }
+
+            // -------------------------------------------------------
+            // Music popup (MPRIS media controls)
+            // -------------------------------------------------------
+            MusicPopup {
+                id: musicPopup
+                anchorWindow: bar
+                anchorItem: musicIcon
+
+                bgColor: root.bgColor
+                fgColor: root.fgColor
+                mutedColor: root.mutedColor
+                accentGreen: root.accentGreen
+                accentYellow: root.accentYellow
+                accentOrange: root.accentOrange
                 fontFamily: root.fontFamily
                 fontSize: root.fontSize
             }

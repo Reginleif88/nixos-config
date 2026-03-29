@@ -33,6 +33,22 @@
         "type": "github"
       }
     },
+    "ascii-vault": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774535705,
+        "narHash": "sha256-UOMX78kML+D5MQQyRFN0+OnYIb26TYLA/Z2yJ7xBvlg=",
+        "owner": "lorediggia",
+        "repo": "ascii-vault",
+        "rev": "186136a3b3b084b733a8a2a25442f3217a94f3fa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "lorediggia",
+        "repo": "ascii-vault",
+        "type": "github"
+      }
+    },
     "cachyos-kernel": {
       "flake": false,
       "locked": {
@@ -789,6 +805,7 @@
     },
     "root": {
       "inputs": {
+        "ascii-vault": "ascii-vault",
         "claude-code": "claude-code",
         "dwproton": "dwproton",
         "home-manager": "home-manager",
