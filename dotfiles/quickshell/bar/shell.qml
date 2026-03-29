@@ -344,8 +344,8 @@ ShellRoot {
             readonly property var hyprMonitor: Hyprland.monitors.values.find(
                 function(m) { return m.name === bar.screen.name }) ?? null
 
-            // Workspace IDs for this monitor: DP-1 gets 1,2 — HDMI-A-1 gets 3,4
-            readonly property var monitorWsIds: bar.screen.name === "DP-1" ? [1, 2] : [3, 4]
+            // Workspace IDs for this monitor: DP-3 gets 1,2 — HDMI-A-1 gets 3,4
+            readonly property var monitorWsIds: bar.screen.name === "DP-3" ? [1, 2] : [3, 4]
 
             // Anchor to the top edge, spanning full width
             anchors {
@@ -1139,7 +1139,7 @@ ShellRoot {
     }
 
     // ---------------------
-    // Gemini sidebar (auto-hide, left edge of DP-1)
+    // Gemini sidebar (auto-hide, left edge of DP-3)
     // DISABLED: QtWebEngine crashes quickshell on startup
     // (FATAL: "Argument list is empty, the program name is not passed to QCoreApplication")
     // TODO: re-enable once quickshell fixes WebEngine argv[0] passthrough
@@ -1147,6 +1147,6 @@ ShellRoot {
     // GeminiSidebar {
     //     bgColor: root.bgColor
     //     borderColor: root.mutedColor
-    //     targetScreen: "DP-1"
+    //     targetScreen: "DP-3"
     // }
 }
