@@ -16,6 +16,10 @@
       pai = "bun $HOME/.claude/PAI/Tools/pai.ts";
     };
     shellAliases.hs = "exec hyprland-start";
+    initExtra = ''
+      # Claude Code provider toggle (Anthropic vs ZLM)
+      eval "$(~/.local/bin/claude-provider --env)"
+    '';
   };
 
   # PATH additions

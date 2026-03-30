@@ -22,6 +22,10 @@ in
     blueman
     proton-vpn
     protonmail-desktop
+    aseprite
+    chromium
+    playwright-driver.browsers
+    python3Packages.pip
   ];
 
   # VS Code with PlatformIO extension

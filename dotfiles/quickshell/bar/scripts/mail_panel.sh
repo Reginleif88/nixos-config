@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # mail_panel.sh — Proton Mail status with unread count for Quickshell bar pill.
-# Wraps tray_pill.sh and adds unread count parsing from window title.
-# Proton Mail desktop (Electron) shows "(N) Proton Mail" when there are unread emails.
+# Wraps tray_pill.sh for window status, and mail_unread.py for the actual
+# unread count via Chrome DevTools Protocol into the Electron renderer.
 
 set -euo pipefail
 
@@ -10,15 +10,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 case "${1:-}" in
     --status)
         base=$("$SCRIPT_DIR/tray_pill.sh" --status --title "Proton Mail")
-        title=$(echo "$base" | jq -r '.title // ""')
+        running=$(echo "$base" | jq -r '.running')
 
-        # Parse "(N) Proton Mail" or "Proton Mail (N)" pattern
         unread=0
-        if [[ "$title" =~ \(([0-9]+)\) ]]; then
-            unread="${BASH_REMATCH[1]}"
+        if [ "$running" = "true" ]; then
+            unread=$(python3 "$SCRIPT_DIR/mail_unread.py" 2>/dev/null || echo 0)
         fi
 
-        # Inject unread count into the base JSON
         echo "$base" | jq --argjson u "$unread" '. + {unread: $u}'
         ;;
 

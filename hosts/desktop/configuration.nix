@@ -82,6 +82,9 @@
       "github_repos" = {
         owner = "reginleif88";
       };
+      "zlm_api_key" = {
+        owner = "reginleif88";
+      };
     };
   };
 

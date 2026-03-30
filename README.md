@@ -20,25 +20,30 @@ Gruvbox Dark themed, dual-monitor, NVIDIA-optimized
 
 | Category | Tools |
 |---|---|
-| Window Manager | Hyprland, Hyprbars |
-| Status Bar | Quickshell |
+| Window Manager | Hyprland, Gruvbar (custom titlebar plugin) |
+| Status Bar | Quickshell (custom QML bar) |
 | Terminal | Kitty |
 | Shell | Zsh, Oh My Zsh, Starship |
-| App Launcher | Walker, Elephant |
-| Notifications | Mako |
+| App Launcher | Fuzzel |
+| Notifications | SwayNC |
 | Clipboard | cliphist |
 | Screenshots | grimblast |
 | File Manager | Thunar |
 | Image Viewer | swayimg |
 | Browsers | Zen Browser, Google Chrome |
+| Knowledge | Obsidian |
+| Media | Spotify (Flatpak), Stremio (Flatpak), VLC |
+| Privacy | ProtonVPN, ProtonMail Desktop |
 | Development | VS Code, Claude Code, Gemini CLI, Node.js, Bun, direnv |
 | Containers | Docker, Podman |
 | Virtualisation | KVM / QEMU, libvirt, virt-manager |
+| Android | scrcpy, escrcpy, Winboat |
 | Gaming | Steam, DawnProton, GameScope, GeForce NOW |
 | GPU | NVIDIA with suspend/hibernate and VRAM preservation |
 | Secrets | sops-nix with age encryption |
 | Theme | Gruvbox Material Dark |
 | Kernel | CachyOS BORE (sched-ext, BBRv3, x86-64-v3) |
+| CI/CD | GitHub Actions (automated flake updates) |
 
 ---
 
@@ -48,6 +53,9 @@ Gruvbox Dark themed, dual-monitor, NVIDIA-optimized
 nixos-config/
 ├── flake.nix                       # Flake inputs and system config
 ├── flake.lock
+├── .github/
+│   └── workflows/
+│       └── flake-update.yml        # Automated flake.lock updates (every 12h)
 ├── hosts/
 │   └── desktop/
 │       ├── default.nix             # Host entry point
@@ -67,17 +75,22 @@ nixos-config/
 │   ├── shell.nix                   # Zsh, Starship prompt
 │   ├── kitty.nix                   # Terminal config
 │   ├── hyprland.nix                # Hyprland dotfile deployment
-│   ├── quickshell.nix              # Status bar, Mako, Walker
+│   ├── quickshell.nix              # Status bar, SwayNC, Fuzzel
 │   ├── gtk.nix                     # GTK theming, fonts, cursors
 │   ├── apps.nix                    # Desktop apps, VS Code, MIME types
 │   ├── browser.nix                 # Zen Browser + user.js deployment
 │   ├── ai.nix                      # Claude Code, Gemini CLI, Bun
 │   └── git.nix                     # Git identity, GitHub CLI
+├── plugins/
+│   └── gruvbar/                    # Custom Hyprland titlebar plugin (C++)
 ├── dotfiles/
+│   ├── claude/                     # Claude Code settings
+│   ├── fuzzel/                     # App launcher config
 │   ├── hypr/                       # Hyprland configs (deployed via home.file)
 │   ├── quickshell/bar/             # Quickshell QML bar + scripts
+│   ├── swaync/                     # Notification center config and theme
 │   ├── xfce4/                      # Thunar config
-│   └── zen-browser/user.js         # Zen Browser preferences
+│   └── zen-browser/                # Zen Browser user.js and policies.json
 ├── secrets/
 │   ├── .sops.yaml                  # sops-nix config
 │   ├── keys.txt.age                # Passphrase-protected age private key

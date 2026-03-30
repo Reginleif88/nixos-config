@@ -25,6 +25,7 @@
       "Bash(objdump *)",
       "Bash(find *)",
       "Bash(grep *)",
+      "Bash(bun run ~/.claude/tools/isc/ISCManager.ts *)",
       "Read(//home/reginleif88/.config/**)",
       "Read(//nix/store/**)"
     ]
@@ -42,6 +43,10 @@
           {
             "type": "command",
             "command": "rm -f ~/.claude/pomodoro"
+          },
+          {
+            "type": "command",
+            "command": "bash ~/.claude/tools/isc/isc-validate.sh"
           }
         ]
       }

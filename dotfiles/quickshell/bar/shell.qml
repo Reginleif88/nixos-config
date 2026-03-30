@@ -215,6 +215,57 @@ ShellRoot {
     }
 
     // ---------------------
+    // Claude provider state (Anthropic / ZLM toggle)
+    // ---------------------
+    property string claudeProvider: "anthropic"
+    property string claudeLabel: "API"
+    property string _claudeStatusBuf: ""
+    property string _claudeToggleBuf: ""
+
+    readonly property string claudeProviderScript:
+        Qt.resolvedUrl("scripts/claude_provider.sh").toString().replace("file://", "")
+
+    Process {
+        id: claudeStatusProc
+        command: ["bash", root.claudeProviderScript, "--status"]
+        stdout: SplitParser {
+            onRead: function(line) { root._claudeStatusBuf += line }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._claudeStatusBuf)
+                root.claudeProvider = d.provider || "anthropic"
+                root.claudeLabel = d.label || "API"
+            } catch(e) {}
+            root._claudeStatusBuf = ""
+        }
+    }
+
+    Process {
+        id: claudeToggleProc
+        command: ["bash", root.claudeProviderScript, "--toggle"]
+        stdout: SplitParser {
+            onRead: function(line) { root._claudeToggleBuf += line }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._claudeToggleBuf)
+                root.claudeProvider = d.provider || "anthropic"
+                root.claudeLabel = d.label || "API"
+            } catch(e) {}
+            root._claudeToggleBuf = ""
+        }
+    }
+
+    Timer {
+        interval: 30000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: claudeStatusProc.running = true
+    }
+
+    // ---------------------
     // Notification center (SwayNC) state
     // ---------------------
     property int notifCount: 0
@@ -982,6 +1033,31 @@ ShellRoot {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: obsToggleProc.running = true
+                            }
+                        }
+                    }
+
+                    // ---- Claude provider pill (Anthropic / ZLM) ----
+                    Pill {
+                        Text {
+                            text: root.claudeLabel
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            font.bold: true
+                            color: root.claudeProvider === "zlm" ? root.accentOrange : root.accentTeal
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (root.claudeProvider === "zlm") {
+                                        root.claudeProvider = "anthropic"
+                                        root.claudeLabel = "API"
+                                    } else {
+                                        root.claudeProvider = "zlm"
+                                        root.claudeLabel = "ZLM"
+                                    }
+                                    claudeToggleProc.running = true
+                                }
                             }
                         }
                     }
