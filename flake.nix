@@ -37,6 +37,8 @@
 
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
 
+    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
+
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
 
     ascii-vault = {
