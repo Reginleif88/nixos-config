@@ -32,8 +32,8 @@ class CBar : public IHyprWindowDecoration {
     bool           m_bWindowSizeChanged = true;
 
     // Cached textures
-    SP<ITexture> m_pTextTex;
-    SP<ITexture> m_pButtonsTex;
+    SP<Render::ITexture> m_pTextTex;
+    SP<Render::ITexture> m_pButtonsTex;
     std::string    m_szLastTitle;
 
     // Input state

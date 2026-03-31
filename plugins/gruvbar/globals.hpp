@@ -13,7 +13,7 @@ struct SGruvButton {
     CHyprColor  fgcol;
     float       size;
     std::string icon;
-    SP<ITexture> iconTex;
+    SP<Render::ITexture> iconTex;
 };
 
 struct SGlobalState {

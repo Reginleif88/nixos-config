@@ -45,7 +45,7 @@ SDecorationPositioningInfo CBar::getPositioningInfo() {
     info.edges          = DECORATION_EDGE_TOP;
     info.priority       = **PPRECEDENCE ? 10005 : 5000;
     info.reserved       = true;
-    info.desiredExtents = {{0, **PHEIGHT}, {0, 0}};
+    info.desiredExtents = {{0, (int)**PHEIGHT}, {0, 0}};
     return info;
 }
 
