@@ -26,7 +26,17 @@
     ntfs3g
     ventoy-full
     pandoc
-    texliveSmall
+    (texlive.combine {
+      inherit (texlive)
+        scheme-medium
+        collection-langfrench
+        collection-fontsrecommended
+        titlesec
+        mdframed
+        zref
+        needspace
+        ;
+    })
   ];
 
   # NTFS support for mounting secondary drives
