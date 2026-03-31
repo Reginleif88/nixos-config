@@ -24,6 +24,9 @@
     gst_all_1.gst-plugins-ugly
     gst_all_1.gst-libav
     ntfs3g
+    ventoy-full
+    pandoc
+    texliveSmall
   ];
 
   # NTFS support for mounting secondary drives
