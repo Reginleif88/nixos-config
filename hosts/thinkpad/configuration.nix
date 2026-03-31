@@ -8,6 +8,7 @@
     ../../modules/services.nix
     ../../modules/nvidia-prime.nix
     ../../modules/hyprland.nix
+    ../../modules/sunshine.nix
     inputs.sops-nix.nixosModules.sops
     inputs.nixos-hardware.nixosModules.lenovo-thinkpad-p1
   ];

@@ -1,4 +1,4 @@
-{ pkgs, inputs, ... }:
+{ pkgs, inputs, hostname, lib, ... }:
 
 let
   mkt = pkgs.vscode-marketplace;
@@ -27,6 +27,9 @@ in
     playwright-driver.browsers
     python3Packages.pip
     kdePackages.okular
+  ]
+  ++ lib.optionals (hostname == "desktop") [
+    moonlight-qt
   ];
 
   # VS Code with PlatformIO extension
