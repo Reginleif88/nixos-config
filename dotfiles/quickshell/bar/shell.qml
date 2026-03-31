@@ -1021,14 +1021,13 @@ ShellRoot {
 
                     // ---- Obsidian pill ----
                     Pill {
-                        Text {
+                        Image {
                             id: obsIcon
-                            text: "\uDB05\uDCE7"  // 󱓧 nf-md-crystal_ball (Obsidian)
-                            font.pixelSize: root.fontSize
-                            font.family: root.fontFamily
-                            color: root.obsRunning ? root.obsidianPurple
-                                 : root.mutedColor
-                            opacity: root.obsRunning && root.obsMinimized ? 0.6 : 1.0
+                            source: "obsidian-logo.svg"
+                            sourceSize: Qt.size(root.fontSize, root.fontSize)
+                            opacity: root.obsRunning
+                                ? (root.obsMinimized ? 0.6 : 1.0)
+                                : 0.4
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor

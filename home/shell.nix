@@ -18,7 +18,10 @@
     shellAliases.hs = "exec hyprland-start";
     initExtra = ''
       # Claude Code provider toggle (Anthropic vs ZLM)
-      eval "$(~/.local/bin/claude-provider --env)"
+      claude() {
+        eval "$(~/.local/bin/claude-provider --env)"
+        command claude "$@"
+      }
     '';
   };
 

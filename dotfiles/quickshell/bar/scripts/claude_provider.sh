@@ -53,9 +53,9 @@ case "${1:---status}" in
             echo "export ANTHROPIC_AUTH_TOKEN=\"$(cat "$KEY_FILE")\""
             echo 'export ANTHROPIC_BASE_URL="https://api.z.ai/api/anthropic"'
             echo 'export API_TIMEOUT_MS="3000000"'
-            echo 'export ANTHROPIC_DEFAULT_OPUS_MODEL="GLM-4.7"'
-            echo 'export ANTHROPIC_DEFAULT_SONNET_MODEL="GLM-4.7"'
-            echo 'export ANTHROPIC_DEFAULT_HAIKU_MODEL="GLM-4.5-Air"'
+            echo 'export ANTHROPIC_DEFAULT_OPUS_MODEL="glm-5.1"'
+            echo 'export ANTHROPIC_DEFAULT_SONNET_MODEL="glm-5-turbo"'
+            echo 'export ANTHROPIC_DEFAULT_HAIKU_MODEL="glm-4.7"'
         else
             echo 'unset ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL API_TIMEOUT_MS ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL 2>/dev/null || true'
         fi

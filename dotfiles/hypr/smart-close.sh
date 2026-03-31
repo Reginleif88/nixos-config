@@ -12,7 +12,6 @@ should_tray=false
 
 case "$class" in
     protonvpn-app|Proton\ VPN)  should_tray=true ;;
-    spotify|Spotify)             should_tray=true ;;
     obsidian)                    should_tray=true ;;
 esac
 

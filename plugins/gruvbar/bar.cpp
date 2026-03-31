@@ -356,6 +356,10 @@ bool CBar::isLayerSurfaceAbove() {
             return true;
     }
 
+    // Check popups of layer surfaces (e.g. Quickshell AudioMixerPopup)
+    if (g_pCompositor->vectorToLayerPopupSurface(MOUSECOORDS, PMONITOR, &surfaceCoords, &foundLS))
+        return true;
+
     return false;
 }
 
@@ -390,6 +394,19 @@ bool CBar::doButtonPress(Vector2D coords) {
                         it->second(arg);
                     else
                         g_pKeybindManager->m_dispatchers["exec"](b.cmd);
+
+                    // After moving to a special workspace, hide it so the
+                    // window truly disappears regardless of which monitor.
+                    if (dispatcher == "movetoworkspacesilent" && arg.starts_with("special:")) {
+                        auto wsName = arg.substr(8);
+                        for (auto& m : g_pCompositor->m_monitors) {
+                            if (m->m_activeSpecialWorkspace &&
+                                m->m_activeSpecialWorkspace->m_name == "special:" + wsName) {
+                                g_pKeybindManager->m_dispatchers["togglespecialworkspace"](wsName);
+                                break;
+                            }
+                        }
+                    }
                 } else {
                     g_pKeybindManager->m_dispatchers["exec"](b.cmd);
                 }

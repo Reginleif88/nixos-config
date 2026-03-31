@@ -42,6 +42,9 @@ PopupWindow {
     // ─────────────────────────────────────────────────────
     property bool sinkExpanded: false
 
+    // Persist per-app volumes across stream recreation (e.g. Spotify track changes)
+    property var savedVolumes: ({})
+
     readonly property var defaultSink: Pipewire.defaultAudioSink
     readonly property real volumeRaw: defaultSink?.audio?.volume ?? 0
     readonly property int volumeLevel: Math.round(volumeRaw * 100)
@@ -373,14 +376,25 @@ PopupWindow {
                             width: parent.width
                             spacing: 4
 
+                            Component.onCompleted: {
+                                var saved = popup.savedVolumes[modelData.appName]
+                                if (saved === undefined) return
+                                if (saved === "muted")
+                                    toggleGroupMute()
+                                else
+                                    setGroupVolume(saved)
+                            }
+
                             // Apply volume/mute to ALL siblings in the group
                             function setGroupVolume(val) {
+                                popup.savedVolumes[modelData.appName] = val;
                                 var sibs = modelData.siblings;
                                 for (var i = 0; i < sibs.length; i++)
                                     if (sibs[i].audio) sibs[i].audio.volume = val;
                             }
                             function toggleGroupMute() {
                                 var newMuted = !(primaryNode.audio?.muted ?? false);
+                                popup.savedVolumes[modelData.appName] = newMuted ? "muted" : (primaryNode.audio?.volume ?? 1.0);
                                 var sibs = modelData.siblings;
                                 for (var i = 0; i < sibs.length; i++)
                                     if (sibs[i].audio) sibs[i].audio.muted = newMuted;

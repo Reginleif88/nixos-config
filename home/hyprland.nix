@@ -1,4 +1,4 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, inputs, hostname, ... }:
 
 let
   hyprlandPkg = inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland;
@@ -24,9 +24,10 @@ in
   # Place Hyprland config files
   xdg.configFile = {
     "hypr/hyprland-custom.conf".source = ../dotfiles/hypr/hyprland.conf;
-    "hypr/env.conf".source = ../dotfiles/hypr/env.conf;
-    "hypr/monitors.conf".source = ../dotfiles/hypr/monitors.conf;
-    "hypr/workspaces.conf".source = ../dotfiles/hypr/workspaces.conf;
+    "hypr/env.conf".source = ../dotfiles/hypr/hosts/${hostname}/env.conf;
+    "hypr/monitors.conf".source = ../dotfiles/hypr/hosts/${hostname}/monitors.conf;
+    "hypr/workspaces.conf".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.conf;
+    "hypr/settings.conf".source = ../dotfiles/hypr/hosts/${hostname}/settings.conf;
     "hypr/hyprpaper.conf".source = ../dotfiles/hypr/hyprpaper.conf;
     "hypr/backgrounds/rainynight.png".source = ../dotfiles/hypr/backgrounds/rainynight.png;
   };

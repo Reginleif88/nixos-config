@@ -26,6 +26,7 @@ in
     chromium
     playwright-driver.browsers
     python3Packages.pip
+    kdePackages.okular
   ];
 
   # VS Code with PlatformIO extension
@@ -83,6 +84,7 @@ in
       "application/json" = "org.xfce.mousepad.desktop";
       "application/x-shellscript" = "org.xfce.mousepad.desktop";
       "application/xml" = "org.xfce.mousepad.desktop";
+      "application/pdf" = "org.kde.okular.desktop";
     };
   };
 

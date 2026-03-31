@@ -1,5 +1,5 @@
 {
-  description = "NixOS desktop configuration";
+  description = "NixOS configuration";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -48,28 +48,32 @@
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
     let
       system = "x86_64-linux";
-    in
-    {
-      nixosConfigurations.desktop = nixpkgs.lib.nixosSystem {
+
+      commonOverlays = [
+        inputs.nix-vscode-extensions.overlays.default
+        (import ./overlays/default.nix { ascii-vault-src = inputs.ascii-vault; })
+      ];
+
+      mkHost = hostname: hostDir: nixpkgs.lib.nixosSystem {
         inherit system;
         specialArgs = { inherit inputs; };
         modules = [
-          ./hosts/desktop
+          hostDir
           inputs.nix-flatpak.nixosModules.nix-flatpak
-          { nixpkgs.overlays = [
-              inputs.nix-vscode-extensions.overlays.default
-              (import ./overlays/default.nix { ascii-vault-src = inputs.ascii-vault; })
-            ];
-          }
+          { nixpkgs.overlays = commonOverlays; }
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = { inherit inputs; };
+            home-manager.extraSpecialArgs = { inherit inputs; hostname = hostname; };
             home-manager.users.reginleif88 = import ./home;
           }
         ];
       };
+    in
+    {
+      nixosConfigurations.desktop = mkHost "desktop" ./hosts/desktop;
+      nixosConfigurations.thinkpad = mkHost "thinkpad" ./hosts/thinkpad;
     };
 }

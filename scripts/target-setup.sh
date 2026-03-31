@@ -4,6 +4,7 @@
 #   1. Set up sops-nix age key and encrypt secrets (first-time only)
 set -euo pipefail
 
+HOSTNAME="${1:-desktop}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOPS_KEY_DIR="$HOME/.config/sops/age"
 SOPS_KEY_FILE="$SOPS_KEY_DIR/keys.txt"
@@ -87,7 +88,7 @@ echo ""
 echo "=== Setup Complete ==="
 echo ""
 echo "Next steps:"
-echo "  1. Build system:    sudo nixos-rebuild switch --flake $REPO_DIR#desktop"
+echo "  1. Build system:    sudo nixos-rebuild switch --flake $REPO_DIR#$HOSTNAME"
 if [ "$FRESH_SETUP" = true ]; then
   echo "  2. Commit secrets:  git add secrets/ && git commit -m 'Add encrypted secrets'"
   echo "  3. Save keys.txt:   Back up $SOPS_KEY_FILE somewhere safe"
