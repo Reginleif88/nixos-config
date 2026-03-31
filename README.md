@@ -10,7 +10,7 @@ Personal NixOS system configuration for a Hyprland desktop, managed with Nix Fla
 ![Home Manager](https://img.shields.io/badge/Home_Manager-5277C3?style=flat&logoColor=white)
 ![Flakes](https://img.shields.io/badge/Flakes-5277C3?style=flat&logoColor=white)
 
-Gruvbox Dark themed, dual-monitor, NVIDIA-optimized
+Gruvbox Dark themed, multi-host (desktop + ThinkPad), NVIDIA-optimized
 
 </div>
 
@@ -39,7 +39,8 @@ Gruvbox Dark themed, dual-monitor, NVIDIA-optimized
 | Virtualisation | KVM / QEMU, libvirt, virt-manager |
 | Android | scrcpy, escrcpy, Winboat |
 | Gaming | Steam, DawnProton, GameScope, GeForce NOW |
-| GPU | NVIDIA with suspend/hibernate and VRAM preservation |
+| GPU | NVIDIA with suspend/hibernate and VRAM preservation; PRIME offload (ThinkPad) |
+| Power & Hardware | TLP, thermald, fprintd, fwupd (ThinkPad) |
 | Secrets | sops-nix with age encryption |
 | Theme | Gruvbox Material Dark |
 | Kernel | CachyOS BORE (sched-ext, BBRv3, x86-64-v3) |
@@ -57,14 +58,19 @@ nixos-config/
 │   └── workflows/
 │       └── flake-update.yml        # Automated flake.lock updates (every 12h)
 ├── hosts/
-│   └── desktop/
+│   ├── desktop/
+│   │   ├── default.nix             # Host entry point
+│   │   ├── configuration.nix       # System-level config
+│   │   └── hardware-configuration.nix
+│   └── thinkpad/
 │       ├── default.nix             # Host entry point
-│       ├── configuration.nix       # System-level config
+│       ├── configuration.nix       # TLP, thermald, fprintd, fwupd, lid switch
 │       └── hardware-configuration.nix
 ├── modules/
 │   ├── core.nix                    # Base packages, locale, boot
 │   ├── hyprland.nix                # Compositor and desktop components
 │   ├── nvidia.nix                  # GPU drivers, modesetting, VRAM
+│   ├── nvidia-prime.nix            # PRIME offload, fine-grained power mgmt
 │   ├── gaming.nix                  # Steam, Proton, GameScope
 │   ├── virtualisation.nix          # KVM, Docker, Podman
 │   ├── services.nix                # PipeWire, Bluetooth, Thunar, Flatpak
@@ -87,6 +93,7 @@ nixos-config/
 │   ├── claude/                     # Claude Code settings
 │   ├── fuzzel/                     # App launcher config
 │   ├── hypr/                       # Hyprland configs (deployed via home.file)
+│   │   └── hosts/{desktop,thinkpad}/  # Per-host env, monitors, workspaces, settings
 │   ├── quickshell/bar/             # Quickshell QML bar + scripts
 │   ├── swaync/                     # Notification center config and theme
 │   ├── xfce4/                      # Thunar config
@@ -118,7 +125,7 @@ git clone https://github.com/Reginleif88/nixos-config.git ~/Documents/nixos-conf
 cd ~/Documents/nixos-config
 
 ./scripts/target-setup.sh          # decrypts age key and sets up secrets
-sudo nixos-rebuild switch --flake .#desktop
+sudo nixos-rebuild switch --flake .#desktop   # or .#thinkpad
 ```
 
 The `target-setup.sh` script handles:

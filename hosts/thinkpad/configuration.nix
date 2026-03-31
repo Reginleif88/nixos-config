@@ -133,6 +133,15 @@
     '';
   };
 
+  # ── SSH server ──────────────────────────────────────────────────────
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "no";
+      PasswordAuthentication = false;
+    };
+  };
+
   # ── Laptop-specific ────────────────────────────────────────────────
 
   # TLP power management with ThinkPad charge thresholds

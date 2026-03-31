@@ -482,5 +482,19 @@ void CBar::onMouseMove(Vector2D coords) {
 }
 
 bool CBar::onInputOnDeco(const eInputType type, const Vector2D& coords, std::any data) {
-    return false; // Input handled via event bus callbacks
+    // Only consume button and drag events; let axis (scroll) and motion pass through
+    if (type != INPUT_TYPE_BUTTON && type != INPUT_TYPE_DRAG_START && type != INPUT_TYPE_DRAG_END)
+        return false;
+
+    static auto* const PHEIGHT = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
+
+    // Bounds check — coords are relative to the decoration's assigned box
+    if (coords.x < 0 || coords.y < 0 || coords.x > assignedBoxGlobal().w || coords.y > **PHEIGHT)
+        return false;
+
+    // Don't intercept clicks on layer surfaces above us (e.g. notification panels)
+    if (isLayerSurfaceAbove())
+        return false;
+
+    return true;
 }
