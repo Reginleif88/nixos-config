@@ -24,7 +24,7 @@
   boot.loader.efi.canTouchEfiVariables = true;
 
   # Networking
-  networking.hostName = "desktop";
+  networking.hostName = "hyacinth";
   networking.networkmanager.enable = true;
 
   # Locale

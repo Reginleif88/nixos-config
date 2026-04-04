@@ -27,7 +27,7 @@
   boot.loader.efi.canTouchEfiVariables = true;
 
   # Networking
-  networking.hostName = "thinkpad";
+  networking.hostName = "wisteria";
   networking.networkmanager.enable = true;
 
   # Locale

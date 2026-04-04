@@ -12,12 +12,13 @@ should_tray=false
 
 case "$class" in
     protonvpn-app|Proton\ VPN)  should_tray=true ;;
-    obsidian)                    should_tray=true ;;
+    Spotify)                     should_tray=true ;;
 esac
 
 # Electron apps share the generic "electron" class — match by title
 if [ "$should_tray" = false ]; then
     case "$title" in
+        *Obsidian*)      should_tray=true ;;
         *Proton\ Mail*)  should_tray=true ;;
     esac
 fi

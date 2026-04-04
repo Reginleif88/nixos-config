@@ -26,7 +26,23 @@
       "Bash(find *)",
       "Bash(grep *)",
       "Bash(xargs *)",
-      "Bash(nix-prefetch-fetchFromGitHub *)"
+      "Bash(nix-prefetch-fetchFromGitHub *)",
+      "Bash(python3 *)",
+      "Bash(python *)",
+      "Bash(curl *)",
+      "Bash(echo *)",
+      "Bash(npm *)",
+      "Bash(npx *)",
+      "Bash(node *)",
+      "Bash(nix-shell *)",
+      "Bash(wc *)",
+      "Bash(mkdir *)",
+      "Bash(unzip *)",
+      "Bash(pdfinfo *)",
+      "Bash(magick *)",
+      "Bash(identify *)",
+      "Bash(chromium *)",
+      "Bash(google-chrome-stable *)"
     ],
     "defaultMode": "default"
   }

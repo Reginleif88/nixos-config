@@ -447,6 +447,12 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
     if (COORDS.x < 0 || COORDS.y < 0 || COORDS.x > assignedBoxGlobal().w || COORDS.y > **PHEIGHT)
         return;
 
+    // Don't consume clicks if our window is occluded by another window
+    auto MOUSECOORDS = g_pInputManager->getMouseCoordsInternal();
+    auto topWin      = g_pCompositor->vectorToWindowUnified(MOUSECOORDS, Desktop::View::RESERVED_EXTENTS | Desktop::View::ALLOW_FLOATING);
+    if (topWin && topWin != PWINDOW)
+        return;
+
     // Don't intercept clicks on layer surfaces above us (e.g. notification panels)
     if (isLayerSurfaceAbove())
         return;

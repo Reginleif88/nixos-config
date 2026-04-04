@@ -28,15 +28,25 @@ in
     python3Packages.pip
     kdePackages.okular
   ]
-  ++ lib.optionals (hostname == "desktop") [
-    moonlight-qt
+  ++ lib.optionals (hostname == "hyacinth") [
+    (pkgs.symlinkJoin {
+      name = "moonlight-qt";
+      paths = [ pkgs.moonlight-qt ];
+      nativeBuildInputs = [ pkgs.makeWrapper ];
+      postBuild = ''
+        wrapProgram $out/bin/moonlight \
+          --set GDK_BACKEND x11 \
+          --set QT_QPA_PLATFORM xcb \
+          --set SDL_VIDEODRIVER x11
+      '';
+    })
   ];
 
   # VS Code with PlatformIO extension
   programs.vscode = {
     enable = true;
     profiles.default.extensions = [
-      mkt.anthropic.claude-code
+      #mkt.anthropic.claude-code  # installed via npm instead
       mkt.davidanson.vscode-markdownlint
       mkt.donjayamanne.githistory
       mkt.github.copilot-chat

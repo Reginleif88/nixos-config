@@ -31,8 +31,6 @@
 
     zen-browser.url = "github:youwen5/zen-browser-flake";
 
-    claude-code.url = "github:sadjow/claude-code-nix";
-
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
@@ -75,7 +73,7 @@
       };
     in
     {
-      nixosConfigurations.desktop = mkHost "desktop" ./hosts/desktop;
-      nixosConfigurations.thinkpad = mkHost "thinkpad" ./hosts/thinkpad;
+      nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/desktop;
+      nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/thinkpad;
     };
 }

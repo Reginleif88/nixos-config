@@ -7,37 +7,16 @@ icon_for() {
     case "$class" in
         firefox*)                echo "󰈹";;
         google-chrome*|chromium*)echo "";;
-        brave*)                  echo "󰖟";;
-        microsoft-edge*)         echo "󰇩";;
         code|code-oss|vscodium)  echo "󰨞";;
-        neovide|nvim*)           echo "";;
-        kitty|alacritty|foot|wezterm|ghostty|org.wezfurlong.wezterm)
-                                 echo "";;
-        thunar|nautilus|nemo|dolphin|pcmanfm*|org.gnome.nautilus)
-                                 echo "󰝰";;
+        kitty)                   echo "";;
+        thunar)                  echo "󰝰";;
         spotify*)                echo "";;
-        discord*)                echo "󰙯";;
-        telegram*|org.telegram*) echo "";;
-        slack*)                  echo "󰒱";;
         steam*)                  echo "󰓓";;
-        gimp*)                   echo "";;
-        inkscape*)               echo "󰃣";;
-        blender*)                echo "󰂫";;
-        obs*)                    echo "󰑋";;
         vlc*)                    echo "󰕼";;
-        mpv*)                    echo "";;
-        thunderbird*)            echo "󰺻";;
-        libreoffice*writer*)     echo "󰈙";;
-        libreoffice*calc*)       echo "󰧷";;
-        libreoffice*impress*)    echo "󰐨";;
-        libreoffice*)            echo "󰏆";;
-        zathura|evince|okular|org.pwmt.zathura)
-                                 echo "";;
-        eog|loupe|imv|feh|swayimg|org.gnome.eog)
-                                 echo "󰋩";;
+        okular)                  echo "";;
+        swayimg)                 echo "󰋩";;
         pavucontrol*)            echo "󰕾";;
         nm-*|network*)           echo "󰤥";;
-        signal*)                 echo "󰭹";;
         obsidian*)               echo "󱓧";;
         *)                       echo "";;
     esac
@@ -54,12 +33,22 @@ while IFS= read -r win; do
     class=$(echo "$win" | jq -r '.class')
     title=$(echo "$win" | jq -r '.title')
     addr=$(echo "$win" | jq -r '.address')
-    icon=$(icon_for "$class")
+
+    # Electron apps share a generic class — resolve display name from title
+    display_class="$class"
+    if [[ "$class" == "electron" ]]; then
+        case "$title" in
+            *Obsidian*)     display_class="obsidian" ;;
+            *Proton\ Mail*) display_class="proton-mail" ;;
+        esac
+    fi
+
+    icon=$(icon_for "$display_class")
 
     if [[ -n "$display" ]]; then
         display+=$'\n'
     fi
-    display+="$addr|$icon  $class: $title"
+    display+="$addr|$icon  $display_class: $title"
 done <<< "$minimized"
 
 # Show picker — fuzzel returns the selected line text

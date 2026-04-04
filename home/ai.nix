@@ -1,16 +1,12 @@
-{ pkgs, inputs, ... }:
+{ pkgs, lib, ... }:
 
-let
-  system = "x86_64-linux";
-in
 {
-  # Node.js (replaces NVM), Claude Code, Bun, Gemini CLI
+  # Node.js (replaces NVM), Bun, Gemini CLI — claude-code installed via npm
   home.packages = with pkgs; [
     nodejs
     bun
     gemini-cli
     jq  # used by statusline.sh
-    inputs.claude-code.packages.${system}.default
   ];
 
   # Claude Code settings (dotfile symlinks)
@@ -37,6 +33,18 @@ in
     source = ../dotfiles/quickshell/bar/scripts/claude_provider.sh;
     executable = true;
   };
+
+  # npm global prefix (writable, for `npm install -g` on NixOS)
+  home.file.".npmrc".text = "prefix=\${HOME}/.npm-global\n";
+
+  # Auto-install/update claude-code on every rebuild
+  home.activation.claude-code = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    export npm_config_prefix="$HOME/.npm-global"
+    export PATH="$npm_config_prefix/bin:$PATH"
+
+    npm install -g @anthropic-ai/claude-code@latest 2>/dev/null || true
+    claude install 2>/dev/null || true
+  '';
 
   # direnv for per-project Node/tooling versions
   programs.direnv = {

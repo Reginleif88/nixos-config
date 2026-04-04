@@ -17,6 +17,9 @@
     };
     shellAliases.hs = "exec hyprland-start";
     initContent = ''
+      # Add npm global bin to PATH for the current session
+      export PATH="$HOME/.npm-global/bin:$PATH"
+
       # Claude Code provider toggle (Anthropic vs ZLM)
       claude() {
         eval "$(~/.local/bin/claude-provider --env)"
@@ -29,6 +32,7 @@
   home.sessionPath = [
     "$HOME/.local/bin"
     "$HOME/.bun/bin"
+    "$HOME/.npm-global/bin"
   ];
 
   # Starship prompt with Gruvbox palette

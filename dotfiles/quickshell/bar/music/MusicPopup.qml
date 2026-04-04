@@ -34,6 +34,7 @@ PopupWindow {
     // Expose state to parent for bar pill
     property bool playerAvailable: false
     property string playerStatus: "Stopped"
+    property string playerName: ""
     property string trackTitle: ""
     property string trackArtist: ""
     property string trackAlbum: ""
@@ -57,6 +58,7 @@ PopupWindow {
             var d = JSON.parse(buf)
             popup.playerAvailable = d.available || false
             popup.playerStatus = d.status || "Stopped"
+            popup.playerName = d.player || ""
             popup.trackTitle = d.title || ""
             popup.trackArtist = d.artist || ""
             popup.trackAlbum = d.album || ""
@@ -78,7 +80,7 @@ PopupWindow {
         id: statusProc
         command: ["bash", popup.scriptsDir + "music_panel.sh", "--status"]
         stdout: SplitParser {
-            onRead: function(line) { popup._buf += line }
+            onRead: function(line) { popup._buf += line + "\n" }
         }
         onExited: function() {
             popup._parseStatus(popup._buf)
@@ -92,7 +94,7 @@ PopupWindow {
         running: !popup.visible
         repeat: true
         triggeredOnStart: true
-        onTriggered: statusProc.running = true
+        onTriggered: if (!statusProc.running) statusProc.running = true
     }
 
     // Foreground poll (faster updates when popup open)
@@ -101,23 +103,26 @@ PopupWindow {
         running: popup.visible
         repeat: true
         triggeredOnStart: true
-        onTriggered: statusProc.running = true
+        onTriggered: if (!statusProc.running) statusProc.running = true
     }
 
     // ─────────────────────────────────────────────────────
-    // Action processes
+    // Action processes (each has its own buffer to prevent
+    // interleaving if two actions fire concurrently)
     // ─────────────────────────────────────────────────────
-    property string _actionBuf: ""
+    property string _playPauseBuf: ""
+    property string _nextBuf: ""
+    property string _prevBuf: ""
 
     Process {
         id: playPauseProc
         command: ["bash", popup.scriptsDir + "music_panel.sh", "--play-pause"]
         stdout: SplitParser {
-            onRead: function(line) { popup._actionBuf += line }
+            onRead: function(line) { popup._playPauseBuf += line + "\n" }
         }
         onExited: function() {
-            popup._parseStatus(popup._actionBuf)
-            popup._actionBuf = ""
+            popup._parseStatus(popup._playPauseBuf)
+            popup._playPauseBuf = ""
         }
     }
 
@@ -125,11 +130,11 @@ PopupWindow {
         id: nextProc
         command: ["bash", popup.scriptsDir + "music_panel.sh", "--next"]
         stdout: SplitParser {
-            onRead: function(line) { popup._actionBuf += line }
+            onRead: function(line) { popup._nextBuf += line + "\n" }
         }
         onExited: function() {
-            popup._parseStatus(popup._actionBuf)
-            popup._actionBuf = ""
+            popup._parseStatus(popup._nextBuf)
+            popup._nextBuf = ""
         }
     }
 
@@ -137,11 +142,22 @@ PopupWindow {
         id: prevProc
         command: ["bash", popup.scriptsDir + "music_panel.sh", "--previous"]
         stdout: SplitParser {
-            onRead: function(line) { popup._actionBuf += line }
+            onRead: function(line) { popup._prevBuf += line + "\n" }
         }
         onExited: function() {
-            popup._parseStatus(popup._actionBuf)
-            popup._actionBuf = ""
+            popup._parseStatus(popup._prevBuf)
+            popup._prevBuf = ""
+        }
+    }
+
+    Process {
+        id: spotifyProc
+        command: ["bash", "-c",
+            "rm -f ~/.var/app/com.spotify.Client/cache/spotify/Singleton{Lock,Socket,Cookie} 2>/dev/null; " +
+            "exec bash '" + popup.scriptsDir + "tray_pill.sh' --toggle --class Spotify " +
+            "--launch 'flatpak run com.spotify.Client'"]
+        onExited: function() {
+            statusProc.running = true
         }
     }
 
@@ -231,9 +247,7 @@ PopupWindow {
                     color: Qt.rgba(popup.fgColor.r, popup.fgColor.g, popup.fgColor.b, 0.15)
 
                     Rectangle {
-                        width: popup.trackLength > 0
-                               ? parent.width * Math.min(popup.trackPosition / popup.trackLength, 1.0)
-                               : 0
+                        width: parent.width * Math.min(popup.trackPosition / popup.trackLength, 1.0)
                         height: parent.height
                         radius: 2
                         color: popup.accentGreen
@@ -334,19 +348,15 @@ PopupWindow {
                 color: popup.mutedColor
             }
 
-            // ── Open Spotify button ───────────────────────
+            // ── Open Spotify button (only when no other player active) ───
             Rectangle {
+                visible: popup.playerName === "" || popup.playerName.toLowerCase().indexOf("spotify") !== -1
                 width: parent.width
                 height: 28
                 radius: 4
                 color: openSpotifyMa.containsMouse
                        ? Qt.rgba(popup.accentGreen.r, popup.accentGreen.g, popup.accentGreen.b, 0.2)
                        : "transparent"
-
-                Process {
-                    id: spotifyProc
-                    command: ["/run/current-system/sw/bin/flatpak", "run", "com.spotify.Client"]
-                }
 
                 Text {
                     anchors.centerIn: parent

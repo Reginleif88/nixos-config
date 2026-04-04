@@ -26,7 +26,7 @@ import Quickshell.Hyprland
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import Quickshell.Services.Pipewire
-// import "sidebar"  // disabled: QtWebEngine crashes quickshell
+import "sidebar"
 import "network"
 import "audio"
 import "vpn"
@@ -174,7 +174,7 @@ ShellRoot {
 
     Process {
         id: obsStatusProc
-        command: ["bash", root.trayScript, "--status", "--class", "obsidian"]
+        command: ["bash", root.trayScript, "--status", "--title", "Obsidian"]
         stdout: SplitParser {
             onRead: function(line) { root._obsBuf += line }
         }
@@ -190,7 +190,7 @@ ShellRoot {
 
     Process {
         id: obsToggleProc
-        command: ["bash", root.trayScript, "--toggle", "--class", "obsidian", "--launch", "obsidian"]
+        command: ["bash", root.trayScript, "--toggle", "--title", "Obsidian", "--launch", "obsidian"]
         onExited: function() { obsPostToggleTimer.restart() }
     }
 
@@ -1021,6 +1021,9 @@ ShellRoot {
 
                     // ---- Obsidian pill ----
                     Pill {
+                        color: root.obsRunning && !root.obsMinimized
+                            ? Qt.rgba(root.obsidianPurple.r, root.obsidianPurple.g, root.obsidianPurple.b, 0.55)
+                            : root.pillColor
                         Image {
                             id: obsIcon
                             source: "obsidian-logo.svg"
@@ -1400,15 +1403,10 @@ ShellRoot {
         }
     }
 
-    // ---------------------
     // Gemini sidebar (auto-hide, left edge of DP-3)
-    // DISABLED: QtWebEngine crashes quickshell on startup
-    // (FATAL: "Argument list is empty, the program name is not passed to QCoreApplication")
-    // TODO: re-enable once quickshell fixes WebEngine argv[0] passthrough
-    // ---------------------
-    // GeminiSidebar {
-    //     bgColor: root.bgColor
-    //     borderColor: root.mutedColor
-    //     targetScreen: "DP-3"
-    // }
+    GeminiSidebar {
+        bgColor: root.bgColor
+        borderColor: root.mutedColor
+        targetScreen: "DP-3"
+    }
 }

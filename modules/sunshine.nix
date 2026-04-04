@@ -1,6 +1,9 @@
 { pkgs, ... }:
 
 {
+  # Sunshine needs /dev/uinput to inject mouse/keyboard input via virtual devices
+  hardware.uinput.enable = true;
+
   # Sunshine game streaming host (Moonlight-compatible)
   services.sunshine = {
     enable = true;

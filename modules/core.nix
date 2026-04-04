@@ -55,6 +55,9 @@
     monospace = [ "FiraCode Nerd Font" ];
   };
 
+  # nix-ld: run unpatched binaries (e.g. npm-installed CLIs like claude-code)
+  programs.nix-ld.enable = true;
+
   # PlatformIO udev rules for Arduino/ESP32 board access
   services.udev.packages = [ pkgs.platformio-core ];
 

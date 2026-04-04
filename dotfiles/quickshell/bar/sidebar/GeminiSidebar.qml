@@ -86,15 +86,23 @@ Item {
                 }
 
                 Loader {
+                    id: webLoader
                     anchors.fill: parent
                     anchors.rightMargin: 1
                     active: sidebarRoot.geminiProfile !== null
 
                     sourceComponent: WebEngineView {
+                        id: webView
                         url: sidebarRoot.url
                         backgroundColor: sidebarRoot.bgColor
                         profile: sidebarRoot.geminiProfile
                     }
+                }
+
+                Shortcut {
+                    sequence: "F5"
+                    enabled: sidebarRoot.open && webLoader.item !== null
+                    onActivated: webLoader.item.reload()
                 }
             }
 

@@ -385,6 +385,23 @@ PopupWindow {
                                     setGroupVolume(saved)
                             }
 
+                            // Re-apply saved volume after a delay — apps like Spotify
+                            // reset the stream volume after creation, overriding the
+                            // immediate restore above.
+                            Timer {
+                                interval: 500
+                                running: true
+                                repeat: false
+                                onTriggered: {
+                                    var saved = popup.savedVolumes[modelData.appName]
+                                    if (saved === undefined) return
+                                    if (saved === "muted")
+                                        toggleGroupMute()
+                                    else
+                                        setGroupVolume(saved)
+                                }
+                            }
+
                             // Apply volume/mute to ALL siblings in the group
                             function setGroupVolume(val) {
                                 popup.savedVolumes[modelData.appName] = val;

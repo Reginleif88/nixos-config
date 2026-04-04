@@ -2,10 +2,35 @@
 
 let
   system = "x86_64-linux";
-  # NOTE: qt6-webengine removed — it crashes quickshell on startup
-  # (FATAL: "Argument list is empty, the program name is not passed to QCoreApplication")
-  # GeminiSidebar is disabled until quickshell fixes WebEngine support
-  quickshellPkg = inputs.quickshell.packages.${system}.default;
+  baseQs = inputs.quickshell.packages.${system}.default;
+
+  # Patch quickshell for WebEngine support (upstream PR #351, not yet merged):
+  # 1. Fix argv[0] passthrough — WebEngine/Chromium crashes without it
+  # 2. Disable jemalloc — conflicts with Chromium's memory allocator
+  patchedUnwrapped = baseQs.passthru.unwrapped.overrideAttrs (prev: {
+    postPatch = (prev.postPatch or "") + ''
+      substituteInPlace src/launch/launch.cpp \
+        --replace-warn 'auto qArgC = 0;' 'auto qArgC = 1;'
+    '';
+    cmakeFlags = builtins.filter (f: builtins.match ".*USE_JEMALLOC.*" f == null) prev.cmakeFlags
+      ++ [ "-DUSE_JEMALLOC:BOOL=OFF" ];
+    buildInputs = builtins.filter (dep: dep.pname or "" != "jemalloc") prev.buildInputs;
+  });
+
+  # Rebuild wrapper around patched binary, adding qtwebengine for QML imports
+  quickshellPkg = patchedUnwrapped.stdenv.mkDerivation {
+    inherit (patchedUnwrapped) version meta;
+    pname = "${patchedUnwrapped.pname}-wrapped";
+    nativeBuildInputs = patchedUnwrapped.nativeBuildInputs ++ [ pkgs.qt6Packages.wrapQtAppsHook ];
+    buildInputs = patchedUnwrapped.buildInputs ++ [ pkgs.qt6Packages.qtwebengine ];
+    dontUnpack = true;
+    dontConfigure = true;
+    dontBuild = true;
+    installPhase = ''
+      mkdir -p $out
+      cp -r ${patchedUnwrapped}/* $out
+    '';
+  };
 in
 {
   home.packages = [
