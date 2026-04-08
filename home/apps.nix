@@ -25,6 +25,7 @@ in
     aseprite
     chromium
     playwright-driver.browsers
+    playwright-test
     python3Packages.pip
     kdePackages.okular
   ]
@@ -41,6 +42,9 @@ in
       '';
     })
   ];
+
+  # Point Playwright at Nix-managed browsers instead of downloading its own
+  home.sessionVariables.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
 
   # VS Code with PlatformIO extension
   programs.vscode = {
