@@ -121,6 +121,14 @@ in
     };
   };
 
+  # Symlink ascii-vault config dir to repo for backup
+  home.activation.ascii-vault = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    dir="$HOME/.config/ascii-vault"
+    repo="/home/reginleif88/Documents/nixos-config/dotfiles/ascii-vault"
+    rm -rf "$dir"
+    ln -sfn "$repo" "$dir"
+  '';
+
   # Thunar XML config
   xdg.configFile."xfce4" = {
     source = ../dotfiles/xfce4;

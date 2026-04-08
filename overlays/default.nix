@@ -1,6 +1,43 @@
 # Custom package overlays
-{ ascii-vault-src, ... }:
-final: prev: {
+{ ascii-vault-src, fenix, system, ... }:
+final: prev:
+let
+  # ── Nightly Rust toolchain (for moonlight-web-stream) ──────────────
+  fenixPkgs = fenix.packages.${system};
+  nightlyManifest = fenixPkgs.toolchainOf {
+    channel = "nightly";
+    date = "2026-02-13";
+    sha256 = "sha256-S4LusOItdSmt4Z+R5llNu9B3h1Lt+BXQuY9BUnl2xFg=";
+  };
+  nightlyToolchain = fenixPkgs.combine [
+    nightlyManifest.cargo
+    nightlyManifest.rustc
+  ];
+  nightlyRustPlatform = prev.makeRustPlatform {
+    cargo = nightlyToolchain;
+    rustc = nightlyToolchain;
+  };
+
+  # ── moonlight-web-stream sources ──────────────────────────────────
+  moonlight-web-stream-src = prev.fetchFromGitHub {
+    owner = "MrCreativ3001";
+    repo = "moonlight-web-stream";
+    rev = "v2.7";
+    hash = "sha256-Fnl++Ij6eBqlnZMxxgsk6Q8SZSnik4ej2qBnsQ7jP34=";
+    fetchSubmodules = true;
+  };
+
+  # C GameStream protocol library (submodule of moonlight-common-rust,
+  # not fetched by Nix's cargo vendoring — injected in postConfigure)
+  moonlight-common-c-src = prev.fetchFromGitHub {
+    owner = "moonlight-stream";
+    repo = "moonlight-common-c";
+    rev = "62687809b1f7410c3db4be2527503a54ae408d70";
+    hash = "sha256-UCWdo5AudWHE/cWmZGwk5hJSgLVRBdhrg8SPvswNisU=";
+    fetchSubmodules = true; # moonlight-common-c has an enet submodule
+  };
+in
+{
   ascii-vault = prev.rustPlatform.buildRustPackage {
     pname = "ascii-vault";
     version = "1.0.0";
@@ -54,5 +91,71 @@ final: prev: {
         --replace-warn 'Exec=AppRun' 'Exec=winboat'
       cp -r ${appimageContents}/usr/share/icons $out/share/icons
     '';
+  };
+
+  # ── Moonlight Web Stream ──────────────────────────────────────────
+  # WebRTC bridge: browser ←WebRTC→ web-server ←GameStream→ Sunshine
+  moonlight-web-stream = nightlyRustPlatform.buildRustPackage {
+    pname = "moonlight-web-stream";
+    version = "2.7.0";
+    src = moonlight-web-stream-src;
+
+    cargoHash = "sha256-v98g6sXJgjNYtaXjz7iV4HYLVnpiA8y5TAeRQ/PF6KI=";
+
+    nativeBuildInputs = with prev; [
+      pkg-config
+      cmake
+      perl # openssl-sys vendored build needs perl for ./Configure
+      nodejs_24
+      npmHooks.npmConfigHook
+      rustPlatform.bindgenHook
+    ];
+
+    buildInputs = with prev; [
+      openssl
+    ];
+
+    npmDeps = prev.fetchNpmDeps {
+      src = moonlight-web-stream-src;
+      hash = "sha256-hT/RM9vdq5CYmZJm0kW0OUos/6uhCvxA8uVxkgFHqZI=";
+    };
+
+    # Nix's cargo vendoring doesn't recurse into git dependency submodules.
+    # The moonlight-common-rust git dep has moonlight-common-sys which needs
+    # moonlight-common-c compiled via cmake. Inject the C source here.
+    postConfigure = ''
+      for dir in $(find . -path "*/moonlight-common-sys" -type d 2>/dev/null); do
+        if [ ! -f "$dir/moonlight-common-c/CMakeLists.txt" ]; then
+          echo "Injecting moonlight-common-c into $dir/moonlight-common-c"
+          rm -rf "$dir/moonlight-common-c"
+          cp -r ${moonlight-common-c-src} "$dir/moonlight-common-c"
+          chmod -R u+w "$dir/moonlight-common-c"
+        fi
+      done
+    '';
+
+    # Build TypeScript frontend before Rust compilation.
+    # npm run build → generate-bindings (cargo test) → tsc → cpx static assets
+    preBuild = ''
+      npm ci
+      patchShebangs node_modules
+      npm run build
+      mv dist static 2>/dev/null || true
+    '';
+
+    postInstall = ''
+      mkdir -p $out/share/moonlight-web-stream
+      cp -r static $out/share/moonlight-web-stream/
+    '';
+
+    doCheck = false;
+
+    meta = with prev.lib; {
+      description = "WebRTC bridge connecting browsers to Sunshine's GameStream protocol";
+      homepage = "https://github.com/MrCreativ3001/moonlight-web-stream";
+      license = licenses.gpl3Plus;
+      platforms = platforms.linux;
+      mainProgram = "web-server";
+    };
   };
 }

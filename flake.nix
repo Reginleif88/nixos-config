@@ -43,6 +43,11 @@
       url = "github:lorediggia/ascii-vault";
       flake = false;
     };
+
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, home-manager, ... }@inputs:
@@ -51,7 +56,11 @@
 
       commonOverlays = [
         inputs.nix-vscode-extensions.overlays.default
-        (import ./overlays/default.nix { ascii-vault-src = inputs.ascii-vault; })
+        (import ./overlays/default.nix {
+          ascii-vault-src = inputs.ascii-vault;
+          inherit (inputs) fenix;
+          inherit system;
+        })
       ];
 
       mkHost = hostname: hostDir: nixpkgs.lib.nixosSystem {

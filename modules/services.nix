@@ -30,7 +30,7 @@
   services.tumbler.enable = true;
   environment.systemPackages = with pkgs; [
     ffmpegthumbnailer
-    xarchiver
+    file-roller
     nwg-displays
     pwvucontrol
     qpwgraph
