@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, hostname, lib, ... }:
 
 {
   # Zsh
@@ -15,7 +15,7 @@
       la = "ls -A";
       pai = "bun $HOME/.claude/PAI/Tools/pai.ts";
     };
-    shellAliases.hs = "exec hyprland-start";
+    shellAliases.hs = lib.mkIf (builtins.elem hostname [ "hyacinth" "wisteria" ]) "exec hyprland-start";
     initContent = ''
       # Add npm global bin to PATH for the current session
       export PATH="$HOME/.npm-global/bin:$PATH"

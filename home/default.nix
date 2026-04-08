@@ -1,13 +1,17 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, inputs, hostname, lib, ... }:
 
+let
+  isHyprland = builtins.elem hostname [ "hyacinth" "wisteria" ];
+in
 {
   imports = [
     ./shell.nix
     ./git.nix
     ./ai.nix
-    ./hyprland.nix
     ./kitty.nix
     ./gtk.nix
+  ] ++ lib.optionals isHyprland [
+    ./hyprland.nix
     ./quickshell.nix
     ./apps.nix
     ./browser.nix
@@ -22,7 +26,7 @@
     package = pkgs.bibata-cursors;
     size = 24;
     gtk.enable = true;
-    hyprcursor.enable = true;
+    hyprcursor.enable = isHyprland;
   };
 
   # XDG user directories

@@ -75,5 +75,6 @@
     {
       nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/desktop;
       nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/thinkpad;
+      nixosConfigurations.clematis = mkHost "clematis" ./hosts/vm;
     };
 }
