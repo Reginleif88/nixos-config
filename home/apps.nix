@@ -27,6 +27,7 @@ in
     playwright-driver.browsers
     playwright-test
     python3Packages.pip
+    sops
     kdePackages.okular
   ]
   ++ lib.optionals (hostname == "hyacinth") [

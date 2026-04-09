@@ -11,6 +11,7 @@ in
     gemini-cli
     jq  # used by statusline.sh
     inputs.claude-code.packages.${system}.default
+    inputs.claude-desktop.packages.${system}.claude-desktop-fhs
   ];
 
   # Claude Code settings (dotfile symlinks)
@@ -19,6 +20,15 @@ in
   home.file.".claude/statusline.sh" = {
     source = ../dotfiles/claude/statusline.sh;
     executable = true;
+  };
+
+  # Playwright MCP plugin: redirect user-data-dir to a writable path
+  # (the default uses PLAYWRIGHT_BROWSERS_PATH which is in the read-only Nix store)
+  home.file.".claude/plugins/cache/claude-plugins-official/playwright/unknown/.mcp.json".text = builtins.toJSON {
+    playwright = {
+      command = "npx";
+      args = [ "@playwright/mcp@latest" "--user-data-dir" "/tmp/playwright-mcp" ];
+    };
   };
 
   # Claude Code ISC (Ideal State Criteria) tools and commands
