@@ -110,8 +110,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1775726207,
-        "narHash": "sha256-m8zOT96QlqlU4YProYz+oK2hpr4OEbzPgE/PbdikQP8=",
+        "lastModified": 1775748816,
+        "narHash": "sha256-XLHGXd+mnMVSLhfdub0/KkPWAxzLiOsz8vjmC2cRmWY=",
         "path": "/home/reginleif88/Documents/claude-cowork-nix",
         "type": "path"
       },

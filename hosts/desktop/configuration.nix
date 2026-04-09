@@ -91,6 +91,9 @@
       "zlm_api_key" = {
         owner = "reginleif88";
       };
+      "keyring_password" = {
+        owner = "reginleif88";
+      };
     };
   };
 
