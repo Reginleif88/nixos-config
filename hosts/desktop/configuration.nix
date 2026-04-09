@@ -13,6 +13,7 @@
     ../../modules/sunshine.nix
     ../../modules/moonlight-web-stream.nix
     ../../modules/cloudflared.nix
+    ../../modules/huion.nix
     inputs.sops-nix.nixosModules.sops
   ];
 
