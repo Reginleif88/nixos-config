@@ -215,57 +215,6 @@ ShellRoot {
     }
 
     // ---------------------
-    // Claude Desktop state
-    // ---------------------
-    readonly property color claudeDesktopOrange: "#D97757"  // Claude brand orange
-
-    property bool cdRunning: false
-    property bool cdMinimized: false
-    property string _cdBuf: ""
-
-    Process {
-        id: cdStatusProc
-        command: ["bash", root.trayScript, "--status", "--title", "Claude"]
-        stdout: SplitParser {
-            onRead: function(line) { root._cdBuf += line }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(root._cdBuf)
-                root.cdRunning = d.running || false
-                root.cdMinimized = d.workspace === "special:minimized"
-            } catch(e) {}
-            root._cdBuf = ""
-        }
-    }
-
-    Process {
-        id: cdToggleProc
-        command: ["bash", root.trayScript, "--toggle", "--title", "Claude", "--launch", "claude-desktop"]
-        onExited: function() { cdPostToggleTimer.restart() }
-    }
-
-    Timer {
-        id: cdPostToggleTimer
-        interval: 300
-        onTriggered: cdStatusProc.running = true
-    }
-
-    property int _cdPollCount: 0
-
-    Timer {
-        id: cdPollTimer
-        interval: root._cdPollCount < 15 ? 2000 : 15000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            root._cdPollCount++
-            cdStatusProc.running = true
-        }
-    }
-
-    // ---------------------
     // Claude provider state (Anthropic / ZLM toggle)
     // ---------------------
     property string claudeProvider: "anthropic"
@@ -1086,26 +1035,6 @@ ShellRoot {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: obsToggleProc.running = true
-                            }
-                        }
-                    }
-
-                    // ---- Claude Desktop pill ----
-                    Pill {
-                        color: root.cdRunning && !root.cdMinimized
-                            ? Qt.rgba(root.claudeDesktopOrange.r, root.claudeDesktopOrange.g, root.claudeDesktopOrange.b, 0.55)
-                            : root.pillColor
-                        Image {
-                            id: cdIcon
-                            source: "claude-code-logo.svg"
-                            sourceSize: Qt.size(root.fontSize, root.fontSize)
-                            opacity: root.cdRunning
-                                ? (root.cdMinimized ? 0.6 : 1.0)
-                                : 0.4
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: cdToggleProc.running = true
                             }
                         }
                     }
