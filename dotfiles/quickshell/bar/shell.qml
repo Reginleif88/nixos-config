@@ -817,28 +817,6 @@ ShellRoot {
                         }
                     }
 
-                    // ---- Claude Code pill ----
-                    Pill {
-                        Process {
-                            id: claudeCodeProc
-                            command: ["claude-desktop"]
-                        }
-                        Image {
-                            id: claudeCodeIcon
-                            source: "claude-code-logo.svg"
-                            sourceSize: Qt.size(root.fontSize, root.fontSize)
-                            opacity: claudeCodeHover.containsMouse ? 1.0 : 0.5
-                            Behavior on opacity { NumberAnimation { duration: 150 } }
-                            MouseArea {
-                                id: claudeCodeHover
-                                hoverEnabled: true
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: claudeCodeProc.running = true
-                            }
-                        }
-                    }
-
                     // ---- Audio pill (sink switch + volume) ----
                     Pill {
                         innerSpacing: 8

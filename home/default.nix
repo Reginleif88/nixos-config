@@ -5,6 +5,7 @@ let
 in
 {
   imports = [
+    inputs.claude-desktop.homeManagerModules.default
     ./shell.nix
     ./git.nix
     ./ai.nix

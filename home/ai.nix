@@ -11,8 +11,10 @@ in
     gemini-cli
     jq  # used by statusline.sh
     inputs.claude-code.packages.${system}.default
-    inputs.claude-desktop.packages.${system}.claude-desktop-fhs
   ];
+
+  # Claude Desktop (via claude-cowork-nix home-manager module)
+  programs.claude-desktop.enable = true;
 
   # Claude Code settings (dotfile symlinks)
   home.file.".claude/settings.json".source = ../dotfiles/claude/settings.json;
