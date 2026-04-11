@@ -13,7 +13,7 @@
     ../../modules/sunshine.nix
     ../../modules/moonlight-web-stream.nix
     ../../modules/cloudflared.nix
-    ../../modules/huion.nix
+    ../../modules/huion-ble.nix
     inputs.sops-nix.nixosModules.sops
   ];
 
@@ -93,6 +93,12 @@
         owner = "reginleif88";
       };
       "keyring_password" = {
+        owner = "reginleif88";
+      };
+      "gtasks_client_id" = {
+        owner = "reginleif88";
+      };
+      "gtasks_client_secret" = {
         owner = "reginleif88";
       };
     };

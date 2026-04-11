@@ -2,7 +2,7 @@ name: Flake Update
 
 on:
   schedule:
-    - cron: "0 8,20 * * *" # Every 12h at 08:00 and 20:00 UTC (10:00 and 22:00 Paris)
+    - cron: "0 16 * * *" # Daily at 16:00 UTC (18:00 Paris)
   workflow_dispatch: # Allow manual trigger
 
 concurrency:

@@ -1,0 +1,4 @@
+{
+  "name": "gtasks",
+  "description": "Manage Google Tasks from the command line via the gtasks CLI. Use when creating, viewing, completing, or organizing tasks and task lists in Google Tasks."
+}

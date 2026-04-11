@@ -55,8 +55,13 @@
     };
 
     claude-desktop = {
-      url = "path:/home/reginleif88/Documents/claude-cowork-nix";
+      url = "github:Reginleif88/claude-cowork-nix";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    huion-note-x10-ble = {
+      url = "github:Reginleif88/huion-note-x10-ble";
+      flake = false;
     };
   };
 

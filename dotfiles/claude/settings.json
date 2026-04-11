@@ -25,6 +25,7 @@
       "Bash(objdump *)",
       "Bash(find *)",
       "Bash(grep *)",
+      "Bash(gtasks *)",
       "Bash(bun run ~/.claude/tools/isc/ISCManager.ts *)",
       "Read(//home/reginleif88/.config/**)",
       "Read(//nix/store/**)"
@@ -64,6 +65,7 @@
     "playwright@claude-plugins-official": true,
     "skill-creator@claude-plugins-official": true,
     "claude-code-setup@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true
+    "plugin-dev@claude-plugins-official": true,
+    "gtasks@local": true
   }
 }

@@ -70,12 +70,17 @@
         name = "flathub";
         location = "https://dl.flathub.org/repo/flathub.flatpakrepo";
       }
+      {
+        name = "GeForceNOW";
+        location = "https://international.download.nvidia.com/GFNLinux/flatpak/geforcenow.flatpakrepo";
+      }
     ];
 
     packages = [
       "com.spotify.Client"
       "com.stremio.Stremio"
       "io.podman_desktop.PodmanDesktop"
+      "GeForceNOW:com.nvidia.geforcenow"
     ];
   };
 }

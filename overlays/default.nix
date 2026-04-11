@@ -38,6 +38,26 @@ let
   };
 in
 {
+  gtasks = prev.buildGoModule {
+    pname = "gtasks";
+    version = "0.13.0";
+    src = prev.fetchFromGitHub {
+      owner = "BRO3886";
+      repo = "gtasks";
+      rev = "v0.13.0";
+      hash = "sha256-MoBlKuv8Use1VRQkJizsLfsZ4F2eFsWmWElY6KwmDH0=";
+    };
+    # Run `nix build .#nixosConfigurations.<host>.config.home-manager.users.reginleif88.home.packages`
+    # and replace with the hash from the error output.
+    vendorHash = "sha256-bgg1ZAJya0NfWLLYB10egUhQXIP+A2oaQfh+CdQOOow=";
+    meta = with prev.lib; {
+      description = "CLI client for Google Tasks";
+      homepage = "https://github.com/BRO3886/gtasks";
+      license = licenses.mit;
+      mainProgram = "gtasks";
+    };
+  };
+
   ascii-vault = prev.rustPlatform.buildRustPackage {
     pname = "ascii-vault";
     version = "1.0.0";

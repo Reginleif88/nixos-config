@@ -29,6 +29,8 @@ in
     python3Packages.pip
     sops
     kdePackages.okular
+    ghidra
+    gtasks
   ]
   ++ lib.optionals (hostname == "hyacinth") [
     (pkgs.symlinkJoin {
