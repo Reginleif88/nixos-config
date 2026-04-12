@@ -116,7 +116,7 @@
         exit 1
       fi
 
-      gh auth login --with-token < "$TOKEN_FILE"
+      gh auth login --with-token --insecure-storage < "$TOKEN_FILE"
 
       mkdir -p "$REPOS_DIR"
       for repo in $(cat "$REPOS_FILE"); do
