@@ -41,8 +41,4 @@ jobs:
             git pull
             sudo nixos-rebuild switch --flake .#desktop
             ```
-
-            ## Disabled features to retry
-            - [ ] **hyprbars patch** — check if `hyprland-plugins` caught up to Hyprland; if so, remove `overrideAttrs` wrapper in `home/hyprland.nix`
-            - [ ] **winboat** — switch from AppImage overlay to `pkgs.winboat` in `home/apps.nix` + `overlays/default.nix` (waiting for Go cross-compilation fix in nixpkgs)
           delete-branch: true
