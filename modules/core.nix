@@ -80,7 +80,7 @@
       "com.spotify.Client"
       "com.stremio.Stremio"
       "io.podman_desktop.PodmanDesktop"
-      "GeForceNOW:com.nvidia.geforcenow"
+      { appId = "com.nvidia.geforcenow"; origin = "GeForceNOW"; }
     ];
   };
 }
