@@ -57,14 +57,16 @@ in
   # Use patched BlueZ that tolerates duplicate ATT requests
   hardware.bluetooth.package = bluez-patched;
 
-  # Systemd user service — auto-starts after Bluetooth is ready
+  # Systemd user service — auto-starts after Bluetooth is ready.
+  # Portrait orientation: tablet held vertically (writing orientation).
+  # To switch to landscape, change --orientation to "landscape".
   systemd.user.services.huion-ble = {
-    description = "Huion Note X10 BLE tablet driver";
+    description = "Huion Note X10 BLE tablet driver (portrait)";
     after = [ "bluetooth.target" "graphical-session.target" ];
     wants = [ "bluetooth.target" ];
     wantedBy = [ "graphical-session.target" ];
     serviceConfig = {
-      ExecStart = "${huion-ble-driver}/bin/huion-ble-driver";
+      ExecStart = "${huion-ble-driver}/bin/huion-ble-driver --orientation portrait_cw";
       Restart = "on-failure";
       RestartSec = 3;
     };

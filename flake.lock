@@ -293,11 +293,11 @@
     "huion-note-x10-ble": {
       "flake": false,
       "locked": {
-        "lastModified": 1775935441,
-        "narHash": "sha256-C0J1jlfKzYNKm5VZSwWGK73XJhhUMD6KyDxXWjgIFBA=",
+        "lastModified": 1776004292,
+        "narHash": "sha256-tCvwZj8/vv3uSZWUPSbJfS2iGUAYfePHGjXU8yV//5o=",
         "owner": "Reginleif88",
         "repo": "huion-note-x10-ble",
-        "rev": "e456d6633fcfda9e65723c7ffdc6170c9f6d6017",
+        "rev": "24c9a04448096ee465d7cbf4ca060bec5ea8fac3",
         "type": "github"
       },
       "original": {
