@@ -25,6 +25,6 @@
     libva-utils      # vainfo: verifies VAAPI encoder/decoder availability
     vulkan-tools     # vulkaninfo
     radeontop        # live GPU utilization
-    glxinfo          # OpenGL renderer info
+    mesa-demos       # provides glxinfo / glxgears (renamed from glxinfo)
   ];
 }
