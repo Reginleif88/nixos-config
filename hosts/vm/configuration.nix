@@ -5,12 +5,24 @@
     ../../modules/core.nix
     ../../modules/security.nix
     ../../modules/login.nix
+    ../../modules/amdgpu.nix
+    ../../modules/desktop-xfce.nix
+    ../../modules/sunshine.nix
+    ../../modules/moonlight-web-stream.nix
+    ../../modules/cloudflared.nix
     inputs.sops-nix.nixosModules.sops
   ];
 
-  # Bootloader (BIOS/MBR — no EFI partition)
-  boot.loader.grub.enable = true;
-  boot.loader.grub.device = "/dev/sda";
+  # AMD iGPU (Radeon Vega 7) — no NVIDIA, so build Sunshine with VAAPI/AMF
+  modules.sunshine.useCuda = false;
+
+  # Bootloader: systemd-boot on UEFI/GPT (Q35 + OVMF on Proxmox).
+  # Requires the VM to be (re)created with `machine: q35` and `bios: ovmf`
+  # before this config will boot. hardware-configuration.nix must also
+  # have a fileSystems."/boot" entry for the ESP — regenerate with
+  # `nixos-generate-config --root /mnt` during install.
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.efi.canTouchEfiVariables = true;
 
   # Enable serial console for Proxmox xterm.js
   boot.kernelParams = [
@@ -80,6 +92,8 @@
       "zlm_api_key" = {
         owner = "reginleif88";
       };
+      # Note: cloudflared_token is declared by modules/cloudflared.nix itself.
+      # Add its encrypted value to secrets/secrets.yaml with `sops`.
     };
   };
 

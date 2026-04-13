@@ -16,6 +16,8 @@
     ripgrep
     jq
     cpio
+    pciutils    # lspci for hardware inspection
+    usbutils    # lsusb companion
     cmake
     ffmpeg
     gst_all_1.gst-plugins-base
