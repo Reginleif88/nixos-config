@@ -9,7 +9,6 @@
     ../../modules/desktop-xfce.nix
     ../../modules/sunshine.nix
     ../../modules/moonlight-web-stream.nix
-    ../../modules/cloudflared.nix
     inputs.sops-nix.nixosModules.sops
   ];
 
@@ -92,8 +91,6 @@
       "zlm_api_key" = {
         owner = "reginleif88";
       };
-      # Note: cloudflared_token is declared by modules/cloudflared.nix itself.
-      # Add its encrypted value to secrets/secrets.yaml with `sops`.
     };
   };
 
