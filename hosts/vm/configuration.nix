@@ -23,11 +23,20 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
 
-  # Enable serial console for Proxmox xterm.js
+  # Enable serial console for Proxmox xterm.js + disable CPU mitigations.
+  # mitigations=off bypasses Spectre/Meltdown/etc. workarounds on Zen 3,
+  # reclaiming ~5-15% CPU. Acceptable here because this is a single-tenant
+  # VM running only trusted workloads — do NOT use on multi-tenant hosts.
   boot.kernelParams = [
     "console=tty0"
     "console=ttyS0,115200"
+    "mitigations=off"
   ];
+
+  # Pin CPU at max clock — eliminates frequency-scaling latency spikes
+  # (typically 5-40 ms) during Sunshine encoder ramp-up, which manifest
+  # as stream stutters. Costs ~5W idle power on the host.
+  powerManagement.cpuFreqGovernor = "performance";
 
   # Networking
   networking.hostName = "clematis";
