@@ -27,10 +27,24 @@
   # mitigations=off bypasses Spectre/Meltdown/etc. workarounds on Zen 3,
   # reclaiming ~5-15% CPU. Acceptable here because this is a single-tenant
   # VM running only trusted workloads — do NOT use on multi-tenant hosts.
+  #
+  # video=HDMI-A-0:1920x1080@60e forces the iGPU's HDMI-A-0 connector to
+  # report `connected` even with no monitor, so amdgpu allocates a real
+  # 1920x1080 scanout buffer. Without it, all connectors are
+  # `disconnected`, X falls back to a tiny root window, and Sunshine
+  # captures an empty framebuffer (Moonlight shows a black screen).
+  #
+  # drm.edid_firmware=... loads the kernel's built-in 1920x1080 EDID blob
+  # so X actually sees a connected display with a usable modeline (the
+  # `e` flag alone gives a kernel framebuffer but no EDID, so Xorg falls
+  # back to its 1024x768 default and XFCE renders into a tiny root
+  # window that then gets stretched by the streaming pipeline).
   boot.kernelParams = [
     "console=tty0"
     "console=ttyS0,115200"
     "mitigations=off"
+    "video=HDMI-A-0:1920x1080@60e"
+    "drm.edid_firmware=HDMI-A-0:edid/1920x1080.bin"
   ];
 
   # Pin CPU at max clock — eliminates frequency-scaling latency spikes
@@ -78,7 +92,7 @@
   users.users.reginleif88 = {
     isNormalUser = true;
     description = "reginleif88";
-    extraGroups = [ "wheel" "networkmanager" "video" "audio" ];
+    extraGroups = [ "wheel" "networkmanager" "video" "audio" "uinput" ];
     shell = pkgs.zsh;
   };
 

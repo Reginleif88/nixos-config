@@ -12,7 +12,10 @@
   };
 
   config = {
-    # Sunshine needs /dev/uinput to inject mouse/keyboard input via virtual devices
+    # Sunshine needs /dev/uinput to inject mouse/keyboard input via virtual
+    # devices. The host config must also add the user that runs Sunshine to
+    # the `uinput` group, otherwise every virtual device creation returns
+    # EACCES and inputs from the Moonlight client are silently dropped.
     hardware.uinput.enable = true;
 
     # Sunshine game streaming host (Moonlight-compatible)
