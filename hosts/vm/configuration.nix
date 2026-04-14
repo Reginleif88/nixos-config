@@ -28,24 +28,36 @@
   # reclaiming ~5-15% CPU. Acceptable here because this is a single-tenant
   # VM running only trusted workloads — do NOT use on multi-tenant hosts.
   #
-  # video=HDMI-A-0:1920x1080@60e forces the iGPU's HDMI-A-0 connector to
-  # report `connected` even with no monitor, so amdgpu allocates a real
-  # 1920x1080 scanout buffer. Without it, all connectors are
+  # video=HDMI-A-1:1920x1080@60e forces the iGPU's first HDMI connector
+  # to report `connected` even with no monitor, so amdgpu allocates a
+  # real 1920x1080 scanout buffer. Without it, all connectors are
   # `disconnected`, X falls back to a tiny root window, and Sunshine
   # captures an empty framebuffer (Moonlight shows a black screen).
+  # NOTE: the connector name must match the kernel's naming for this
+  # specific GPU. Verify with `ls /sys/class/drm/` — on this Renoir/
+  # Barcelo APU it's HDMI-A-1 / HDMI-A-2 (not HDMI-A-0 as on some
+  # older AMD parts).
   #
-  # drm.edid_firmware=... loads the kernel's built-in 1920x1080 EDID blob
-  # so X actually sees a connected display with a usable modeline (the
-  # `e` flag alone gives a kernel framebuffer but no EDID, so Xorg falls
-  # back to its 1024x768 default and XFCE renders into a tiny root
-  # window that then gets stretched by the streaming pipeline).
+  # drm.edid_firmware=<conn>:edid/<file> loads an EDID blob from
+  # /lib/firmware/edid/<file>. Modern kernels (6.x) no longer embed
+  # built-in EDIDs, so we ship one ourselves via hardware.firmware
+  # below (pkgs.edid-generator provides standard-resolution .bin files
+  # at $out/lib/firmware/edid/). Without the blob, amdgpu logs
+  # `Requesting EDID firmware ... failed (err=-2)` and the `e` flag
+  # alone gives a kernel framebuffer but no EDID, so Xorg falls back
+  # to its 1024x768 default and XFCE renders into a tiny root window
+  # that then gets stretched by the streaming pipeline.
   boot.kernelParams = [
     "console=tty0"
     "console=ttyS0,115200"
     "mitigations=off"
-    "video=HDMI-A-0:1920x1080@60e"
-    "drm.edid_firmware=HDMI-A-0:edid/1920x1080.bin"
+    "video=HDMI-A-1:1920x1080@60e"
+    "drm.edid_firmware=HDMI-A-1:edid/1920x1080.bin"
   ];
+
+  # Ship edid-generator's prebuilt EDID blobs to /lib/firmware/edid/.
+  # Required by the drm.edid_firmware= kernel param above.
+  hardware.firmware = [ pkgs.edid-generator ];
 
   # Pin CPU at max clock — eliminates frequency-scaling latency spikes
   # (typically 5-40 ms) during Sunshine encoder ramp-up, which manifest

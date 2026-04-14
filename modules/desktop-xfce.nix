@@ -33,4 +33,36 @@
     Option "SuspendTime" "0"
     Option "OffTime" "0"
   '';
+
+  # Force xfwm4's compositor off every session. The dotfile already sets
+  # it to false, but home-manager symlinks the XML read-only from the
+  # store, so xfconfd sometimes falls back to a cached value and the
+  # compositor sneaks back on. An extra frame of compositor buffering is
+  # the single biggest source of typing latency over Sunshine/Moonlight,
+  # so we override imperatively at login via xfconf-query.
+  environment.etc."xdg/autostart/disable-xfwm-compositor.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Disable xfwm4 compositor
+    Exec=${pkgs.xfce.xfconf}/bin/xfconf-query -c xfwm4 -p /general/use_compositing -s false
+    OnlyShowIn=XFCE;
+    X-GNOME-Autostart-enabled=true
+    NoDisplay=true
+  '';
+
+  # Stream-friendly font hinting. H.264/HEVC use 4:2:0 chroma subsampling,
+  # which averages the red/green fringes that subpixel rendering paints on
+  # glyph edges into muddy color bands. Rendering grayscale-only (RGBA=none)
+  # with light hinting keeps edges on integer pixel boundaries, which the
+  # luma channel preserves faithfully — text stays sharp under bitrate
+  # adaptation. Writes to the xsettings channel so GTK + Qt both pick it up.
+  environment.etc."xdg/autostart/xfce-font-hinting.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Stream-friendly font hinting
+    Exec=${pkgs.bash}/bin/bash -c '${pkgs.xfce.xfconf}/bin/xfconf-query -c xsettings -p /Xft/RGBA -s none; ${pkgs.xfce.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Hinting -s true; ${pkgs.xfce.xfconf}/bin/xfconf-query -c xsettings -p /Xft/HintStyle -s hintslight; ${pkgs.xfce.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Antialias -s true'
+    OnlyShowIn=XFCE;
+    X-GNOME-Autostart-enabled=true
+    NoDisplay=true
+  '';
 }
