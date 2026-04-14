@@ -163,8 +163,22 @@ in
 
   home.activation.xfce4-config = lib.mkIf (hostname == "clematis") (
     lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      ${pkgs.procps}/bin/pkill -u $USER -f xfconfd 2>/dev/null || true
-      sleep 0.5
+      # Kill every XFCE process that caches xfconf state and writes it
+      # back. xfce4-panel saves its complete in-memory tree to xfconfd
+      # on exit, xfsettingsd does the same for /xsettings and xfwm4
+      # keybindings — so killing only xfconfd lets them respawn it with
+      # stale state and overwrite what we just copied. Kill all three.
+      ${pkgs.procps}/bin/pkill -u $USER -x xfce4-panel   2>/dev/null || true
+      ${pkgs.procps}/bin/pkill -u $USER -x xfsettingsd   2>/dev/null || true
+      ${pkgs.procps}/bin/pkill -u $USER -f xfconfd       2>/dev/null || true
+      sleep 1
+
+      # Wipe the panel XML outright before copy — if xfconfd already
+      # merged legacy + modern schemas into a malformed file, rsync
+      # will overwrite but xattrs on the existing inode can survive.
+      # A clean rm sidesteps the whole class of ghost-state issues.
+      rm -f "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"
+
       ${pkgs.rsync}/bin/rsync -rL --chmod=u+w --exclude='*.hm-backup' \
         ${../dotfiles/xfce4}/ "$HOME/.config/xfce4/"
     ''
