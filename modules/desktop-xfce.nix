@@ -1,10 +1,17 @@
 { pkgs, ... }:
 
 {
-  # X11 + XFCE session
+  # X11 + XFCE session.
+  # enableScreensaver = false: xfce4-screensaver is a separate component
+  # from the X-server BlankTime/StandbyTime/etc. options below — without
+  # disabling it, it locks the session after ~10 min and Sunshine
+  # captures a black lock screen.
   services.xserver = {
     enable = true;
-    desktopManager.xfce.enable = true;
+    desktopManager.xfce = {
+      enable = true;
+      enableScreensaver = false;
+    };
     xkb.layout = "us";
   };
 
