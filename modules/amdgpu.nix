@@ -4,6 +4,10 @@
   # Load amdgpu early so it claims the iGPU before userspace starts
   boot.initrd.kernelModules = [ "amdgpu" ];
 
+  # linux-firmware — amdgpu needs green_sardine_*.bin (Renoir/Barcelo APUs),
+  # without which early_init of <psp>/<dm>/<gfx>/<sdma>/<vcn> fails with -2.
+  hardware.enableRedistributableFirmware = true;
+
   # X11 driver
   services.xserver.videoDrivers = [ "amdgpu" ];
 
