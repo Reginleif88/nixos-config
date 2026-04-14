@@ -141,10 +141,32 @@ in
     ln -sfn "$repo" "$dir"
   '';
 
-  # Thunar XML config
-  xdg.configFile."xfce4" = {
-    source = ../dotfiles/xfce4;
-    recursive = true;
-    force = true;
+  # XFCE config files. On clematis (an XFCE host), xfconfd reads each
+  # channel XML at session start, then writes its in-memory state back to
+  # disk as a *regular file* — silently destroying any home-manager symlink
+  # to the read-only Nix store. Worse, it merges its old cached state on
+  # top, producing structurally invalid XML over successive logins.
+  #
+  # Workaround: kill xfconfd, then copy (not symlink) the files. xfconfd
+  # restarts on demand and reads our fresh content; future GUI tweaks are
+  # transient and get overwritten on the next home-manager activation.
+  #
+  # On hyacinth/wisteria (Hyprland hosts) xfconfd never runs, so a normal
+  # symlink is fine and avoids the rsync overhead.
+  xdg.configFile = lib.optionalAttrs (hostname != "clematis") {
+    "xfce4" = {
+      source = ../dotfiles/xfce4;
+      recursive = true;
+      force = true;
+    };
   };
+
+  home.activation.xfce4-config = lib.mkIf (hostname == "clematis") (
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      ${pkgs.procps}/bin/pkill -u $USER -f xfconfd 2>/dev/null || true
+      sleep 0.5
+      ${pkgs.rsync}/bin/rsync -rL --chmod=u+w --exclude='*.hm-backup' \
+        ${../dotfiles/xfce4}/ "$HOME/.config/xfce4/"
+    ''
+  );
 }

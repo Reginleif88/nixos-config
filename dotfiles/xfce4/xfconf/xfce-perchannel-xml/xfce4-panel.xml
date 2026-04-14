@@ -1,0 +1,128 @@
+<?xml version="1.1" encoding="UTF-8"?>
+
+<channel name="xfce4-panel" version="1.0">
+  <property name="configver" type="int" value="2"/>
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+  </property>
+
+  <property name="panel-1" type="empty">
+    <!-- Bottom bar, full width, 40 px tall, locked in place.
+         Position p=13 = XFCE_SCREEN_POSITION_S (south/bottom-center
+         horizontal); the x/y are anchor coords that get clamped to the
+         bottom edge once length+size take over. -->
+    <property name="position"        type="string" value="p=13;x=960;y=1080"/>
+    <property name="length"          type="uint"   value="100"/>
+    <property name="position-locked" type="bool"   value="true"/>
+    <property name="size"            type="uint"   value="40"/>
+    <property name="plugin-ids" type="array">
+      <value type="int" value="1"/>  <!-- whiskermenu -->
+      <value type="int" value="2"/>  <!-- separator -->
+      <value type="int" value="3"/>  <!-- zen browser -->
+      <value type="int" value="4"/>  <!-- kitty -->
+      <value type="int" value="5"/>  <!-- vscode -->
+      <value type="int" value="6"/>  <!-- thunar -->
+      <value type="int" value="7"/>  <!-- obsidian -->
+      <value type="int" value="8"/>  <!-- claude desktop -->
+      <value type="int" value="10"/> <!-- mousepad -->
+      <value type="int" value="12"/> <!-- expanding separator -->
+      <value type="int" value="13"/> <!-- tasklist -->
+      <value type="int" value="14"/> <!-- expanding separator -->
+      <value type="int" value="15"/> <!-- systray -->
+      <value type="int" value="16"/> <!-- clock -->
+    </property>
+  </property>
+
+  <property name="plugins" type="empty">
+
+    <!-- App menu -->
+    <property name="plugin-1" type="string" value="whiskermenu"/>
+
+    <!-- Thin separator between menu and launchers -->
+    <property name="plugin-2" type="string" value="separator">
+      <property name="expand" type="bool"  value="false"/>
+      <property name="style"  type="uint"  value="1"/>
+    </property>
+
+    <!-- App launchers — resolved by application ID from XDG_DATA_DIRS -->
+    <property name="plugin-3" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="zen.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-4" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="kitty.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-5" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="code.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-6" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="thunar.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-7" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="obsidian.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-8" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="claude-desktop.desktop"/>
+      </property>
+    </property>
+
+    <property name="plugin-10" type="string" value="launcher">
+      <property name="items" type="array">
+        <value type="string" value="org.xfce.mousepad.desktop"/>
+      </property>
+    </property>
+
+    <!-- Expanding spacer — pushes tasklist to center -->
+    <property name="plugin-12" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style"  type="uint" value="0"/>
+    </property>
+
+    <!-- Open window list -->
+    <property name="plugin-13" type="string" value="tasklist">
+      <property name="show-labels"            type="bool" value="true"/>
+      <property name="grouping"               type="uint" value="0"/>
+      <property name="include-all-workspaces" type="bool" value="false"/>
+      <property name="flat-buttons"           type="bool" value="false"/>
+      <property name="show-handle"            type="bool" value="false"/>
+      <property name="sort-windows"           type="bool" value="true"/>
+    </property>
+
+    <!-- Expanding spacer — pushes systray/clock to right -->
+    <property name="plugin-14" type="string" value="separator">
+      <property name="expand" type="bool" value="true"/>
+      <property name="style"  type="uint" value="0"/>
+    </property>
+
+    <!-- System tray (notification area) -->
+    <property name="plugin-15" type="string" value="systray">
+      <property name="known-legacy-items" type="array"/>
+    </property>
+
+    <!-- Clock: Mon Apr 14  13:37
+         XFCE 4.18+ split the legacy `digital-format` into separate
+         time/date properties; layout=1 means "time only", so the whole
+         string lives in digital-time-format and we get one tidy line. -->
+    <property name="plugin-16" type="string" value="clock">
+      <property name="mode"                type="uint"   value="2"/>
+      <property name="digital-layout"      type="uint"   value="1"/>
+      <property name="digital-time-format" type="string" value="%a %b %-e  %H:%M"/>
+    </property>
+
+  </property>
+</channel>
