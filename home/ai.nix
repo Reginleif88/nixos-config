@@ -14,7 +14,14 @@ in
   ];
 
   # Claude Desktop (via claude-cowork-nix home-manager module)
-  programs.claude-desktop.enable = true;
+  programs.claude-desktop = {
+    enable = true;
+    # Wire CLAUDE_CODE_LOCAL_BINARY into the Electron wrapper so the in-app
+    # Code section's LOCAL sub-mode can spawn claude-code directly (bypasses
+    # CCD's Linux-incompatible getHostPlatform download path).
+    # Same flake input as home.packages above — deduplicated in the store.
+    claudeCodePackage = inputs.claude-code.packages.${system}.default;
+  };
 
   # Claude Code settings (dotfile symlinks)
   home.file.".claude/settings.json".source = ../dotfiles/claude/settings.json;
