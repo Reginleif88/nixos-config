@@ -65,6 +65,11 @@
   # Flatpak with declarative package management via nix-flatpak
   services.flatpak = {
     enable = true;
+    update.onActivation = true;
+    update.auto = {
+      enable = true;
+      onCalendar = "weekly";
+    };
 
     remotes = [
       {

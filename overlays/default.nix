@@ -1,42 +1,6 @@
 # Custom package overlays
-{ ascii-vault-src, fenix, system, ... }:
+{ ascii-vault-src, ... }:
 final: prev:
-let
-  # ── Nightly Rust toolchain (for moonlight-web-stream) ──────────────
-  fenixPkgs = fenix.packages.${system};
-  nightlyManifest = fenixPkgs.toolchainOf {
-    channel = "nightly";
-    date = "2026-02-13";
-    sha256 = "sha256-S4LusOItdSmt4Z+R5llNu9B3h1Lt+BXQuY9BUnl2xFg=";
-  };
-  nightlyToolchain = fenixPkgs.combine [
-    nightlyManifest.cargo
-    nightlyManifest.rustc
-  ];
-  nightlyRustPlatform = prev.makeRustPlatform {
-    cargo = nightlyToolchain;
-    rustc = nightlyToolchain;
-  };
-
-  # ── moonlight-web-stream sources ──────────────────────────────────
-  moonlight-web-stream-src = prev.fetchFromGitHub {
-    owner = "MrCreativ3001";
-    repo = "moonlight-web-stream";
-    rev = "v2.7";
-    hash = "sha256-Fnl++Ij6eBqlnZMxxgsk6Q8SZSnik4ej2qBnsQ7jP34=";
-    fetchSubmodules = true;
-  };
-
-  # C GameStream protocol library (submodule of moonlight-common-rust,
-  # not fetched by Nix's cargo vendoring — injected in postConfigure)
-  moonlight-common-c-src = prev.fetchFromGitHub {
-    owner = "moonlight-stream";
-    repo = "moonlight-common-c";
-    rev = "62687809b1f7410c3db4be2527503a54ae408d70";
-    hash = "sha256-UCWdo5AudWHE/cWmZGwk5hJSgLVRBdhrg8SPvswNisU=";
-    fetchSubmodules = true; # moonlight-common-c has an enet submodule
-  };
-in
 {
   gtasks = prev.buildGoModule {
     pname = "gtasks";
@@ -89,69 +53,138 @@ in
     '';
   };
 
-  # ── Moonlight Web Stream ──────────────────────────────────────────
-  # WebRTC bridge: browser ←WebRTC→ web-server ←GameStream→ Sunshine
-  moonlight-web-stream = nightlyRustPlatform.buildRustPackage {
-    pname = "moonlight-web-stream";
-    version = "2.7.0";
-    src = moonlight-web-stream-src;
+  # ── KasmVNC ────────────────────────────────────────────────────────
+  # Modern VNC server with built-in WebSocket web client (WebP/H.264
+  # encoding). Upstream only provides a Docker-based build, so we
+  # repackage their prebuilt .deb — same approach as nixpkgs draft
+  # PR #363943. The `noble` build (Ubuntu 24.04) is what we need:
+  # jammy ships libssl3 1.1 which would force a legacy openssl dep.
+  kasmvnc = prev.stdenv.mkDerivation rec {
+    pname = "kasmvnc";
+    version = "1.4.0";
 
-    cargoHash = "sha256-v98g6sXJgjNYtaXjz7iV4HYLVnpiA8y5TAeRQ/PF6KI=";
-
-    nativeBuildInputs = with prev; [
-      pkg-config
-      cmake
-      perl # openssl-sys vendored build needs perl for ./Configure
-      nodejs_24
-      npmHooks.npmConfigHook
-      rustPlatform.bindgenHook
-    ];
-
-    buildInputs = with prev; [
-      openssl
-    ];
-
-    npmDeps = prev.fetchNpmDeps {
-      src = moonlight-web-stream-src;
-      hash = "sha256-hT/RM9vdq5CYmZJm0kW0OUos/6uhCvxA8uVxkgFHqZI=";
+    src = prev.fetchurl {
+      url = "https://github.com/kasmtech/KasmVNC/releases/download/v${version}/kasmvncserver_noble_${version}_amd64.deb";
+      sha256 = "sha256-ErrGAUFJxf3udfDUA3haqj5d1OoiLecyU6XUGBvJVn4=";
     };
 
-    # Nix's cargo vendoring doesn't recurse into git dependency submodules.
-    # The moonlight-common-rust git dep has moonlight-common-sys which needs
-    # moonlight-common-c compiled via cmake. Inject the C source here.
-    postConfigure = ''
-      for dir in $(find . -path "*/moonlight-common-sys" -type d 2>/dev/null); do
-        if [ ! -f "$dir/moonlight-common-c/CMakeLists.txt" ]; then
-          echo "Injecting moonlight-common-c into $dir/moonlight-common-c"
-          rm -rf "$dir/moonlight-common-c"
-          cp -r ${moonlight-common-c-src} "$dir/moonlight-common-c"
-          chmod -R u+w "$dir/moonlight-common-c"
-        fi
-      done
+    nativeBuildInputs = with prev; [
+      autoPatchelfHook
+      dpkg
+      makeWrapper
+    ];
+
+    # Runtime libraries the Xkasmvnc/kasmvncpasswd/etc. ELF binaries
+    # link against. autoPatchelfHook rewrites RPATHs to find them.
+    buildInputs = with prev; [
+      (perl.withPackages (pp: with pp; [
+        Switch
+        YAMLTiny
+        HashMergeSimple
+        ListMoreUtils
+        TryTiny
+        DateTime
+        DateTimeTimeZone
+      ]))
+      freetype
+      libgcrypt
+      libpng
+      libunwind
+      libwebp
+      libxcrypt-legacy # provides libcrypt.so.1 (libxcrypt ships .so.2)
+      mesa             # libgbm
+      libGL
+      openssl
+      pixman
+      stdenv.cc.cc.lib # libstdc++
+      systemdLibs
+      xorg.libX11
+      xorg.libXau
+      xorg.libXcursor
+      xorg.libXdmcp
+      xorg.libXext
+      xorg.libXfixes
+      xorg.libXfont2
+      xorg.libXrandr
+      xorg.libXtst
+      xorg.libxshmfence
+    ];
+
+    # dpkg-deb's default unpackPhase leaves us with usr/{bin,lib,share}
+    unpackPhase = ''
+      runHook preUnpack
+      mkdir -p unpacked
+      dpkg-deb -x $src unpacked
+      runHook postUnpack
     '';
 
-    # Build TypeScript frontend before Rust compilation.
-    # npm run build → generate-bindings (cargo test) → tsc → cpx static assets
-    preBuild = ''
-      npm ci
-      patchShebangs node_modules
-      npm run build
-      mv dist static 2>/dev/null || true
+    # Move files into Nix layout. The perl wrapper ships as
+    # `kasmvncserver`; Debian's postinst normally symlinks it to
+    # `vncserver` via update-alternatives, so we replicate that here.
+    installPhase = ''
+      runHook preInstall
+
+      mkdir -p $out/bin $out/lib $out/share
+      cp -r unpacked/usr/bin/*   $out/bin/
+      cp -r unpacked/usr/lib/*   $out/lib/
+      cp -r unpacked/usr/share/* $out/share/
+
+      # update-alternatives equivalents — the perl wrapper invokes
+      # "Xvnc" and "kasmvncpasswd" from its own dir, and downstream
+      # tools expect a "vncserver" entry point.
+      ln -s $out/bin/Xkasmvnc      $out/bin/Xvnc
+      ln -s $out/bin/kasmvncserver $out/bin/vncserver
+      ln -s $out/bin/kasmvncpasswd $out/bin/vncpasswd
+      ln -s $out/bin/kasmxproxy    $out/bin/xproxy
+
+      runHook postInstall
     '';
 
-    postInstall = ''
-      mkdir -p $out/share/moonlight-web-stream
-      cp -r static $out/share/moonlight-web-stream/
-    '';
+    # Upstream hardcodes several /usr paths. Rewrite them to the Nix
+    # store: the perl wrapper's defaults-config path + both branches
+    # of its select-de.sh lookup (IsThisSystemBinary returns false
+    # when $0 is under /nix/store, so the LocalSelectDePath branch
+    # is the one actually taken), and the defaults YAML's www dir.
+    postFixup = ''
+      substituteInPlace $out/bin/kasmvncserver \
+        --replace-fail '/usr/share/kasmvnc/kasmvnc_defaults.yaml' \
+                       "$out/share/kasmvnc/kasmvnc_defaults.yaml" \
+        --replace-fail '"/usr/lib/kasmvncserver/select-de.sh"' \
+                       "\"$out/lib/kasmvncserver/select-de.sh\"" \
+        --replace-fail '"$dirname/../builder/startup/deb/select-de.sh"' \
+                       "\"$out/lib/kasmvncserver/select-de.sh\""
 
-    doCheck = false;
+      substituteInPlace $out/share/kasmvnc/kasmvnc_defaults.yaml \
+        --replace-fail '/usr/share/kasmvnc/www' "$out/share/kasmvnc/www"
+
+      patchShebangs $out/bin/kasmvncserver $out/lib/kasmvncserver/select-de.sh
+
+      # PERL5LIB: script uses `use KasmVNC::...` — modules live in
+      # $out/share/perl5. Runtime PATH: xauth/hostname/xkbcomp are
+      # required dependencies the perl wrapper searches for at startup.
+      wrapProgram $out/bin/kasmvncserver \
+        --prefix PERL5LIB : $out/share/perl5 \
+        --prefix PATH : ${prev.lib.makeBinPath (with prev; [
+          coreutils
+          gawk
+          gnused
+          gnugrep
+          procps
+          nettools       # hostname
+          xorg.xauth
+          xorg.xkbcomp
+          xkeyboard_config
+          which
+        ])}
+    '';
 
     meta = with prev.lib; {
-      description = "WebRTC bridge connecting browsers to Sunshine's GameStream protocol";
-      homepage = "https://github.com/MrCreativ3001/moonlight-web-stream";
-      license = licenses.gpl3Plus;
-      platforms = platforms.linux;
-      mainProgram = "web-server";
+      description = "Modern web-based VNC server with WebP encoding and built-in HTTPS/WebSocket client";
+      homepage = "https://github.com/kasmtech/KasmVNC";
+      license = licenses.gpl2Only;
+      platforms = [ "x86_64-linux" ];
+      mainProgram = "vncserver";
+      sourceProvenance = [ sourceTypes.binaryNativeCode ];
     };
   };
 }

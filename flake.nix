@@ -44,11 +44,6 @@
       flake = false;
     };
 
-    fenix = {
-      url = "github:nix-community/fenix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     claude-code = {
       url = "github:sadjow/claude-code-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -73,8 +68,6 @@
         inputs.nix-vscode-extensions.overlays.default
         (import ./overlays/default.nix {
           ascii-vault-src = inputs.ascii-vault;
-          inherit (inputs) fenix;
-          inherit system;
         })
       ];
 

@@ -2,10 +2,8 @@
 
 {
   # X11 + XFCE session.
-  # enableScreensaver = false: xfce4-screensaver is a separate component
-  # from the X-server BlankTime/StandbyTime/etc. options below — without
-  # disabling it, it locks the session after ~10 min and Sunshine
-  # captures a black lock screen.
+  # enableScreensaver = false: xfce4-screensaver locks the session after
+  # ~10 min, which blocks remote-desktop capture (KasmVNC / Sunshine).
   services.xserver = {
     enable = true;
     desktopManager.xfce = {
@@ -15,9 +13,8 @@
     xkb.layout = "us";
   };
 
-  # LightDM with autologin so an X session is always running for Sunshine
-  # to capture. getty.autologinUser from login.nix continues to handle the
-  # non-graphical TTYs (vt2..vt6) in parallel.
+  # LightDM with autologin so an X session is always running for remote
+  # capture. getty.autologinUser from login.nix handles non-graphical TTYs.
   services.xserver.displayManager.lightdm.enable = true;
   services.displayManager.autoLogin = {
     enable = true;
@@ -25,8 +22,8 @@
   };
   services.displayManager.defaultSession = "xfce";
 
-  # Disable the screen saver — it suspends the X server's framebuffer,
-  # which breaks Sunshine's capture of an idle session.
+  # Disable the screen saver — suspending the framebuffer breaks
+  # remote-desktop capture of an idle session.
   services.xserver.serverFlagsSection = ''
     Option "BlankTime" "0"
     Option "StandbyTime" "0"
@@ -38,7 +35,7 @@
   # it to false, but home-manager symlinks the XML read-only from the
   # store, so xfconfd sometimes falls back to a cached value and the
   # compositor sneaks back on. An extra frame of compositor buffering is
-  # the single biggest source of typing latency over Sunshine/Moonlight,
+  # the single biggest source of typing latency over remote streaming,
   # so we override imperatively at login via xfconf-query.
   environment.etc."xdg/autostart/disable-xfwm-compositor.desktop".text = ''
     [Desktop Entry]
@@ -50,12 +47,10 @@
     NoDisplay=true
   '';
 
-  # Stream-friendly font hinting. H.264/HEVC use 4:2:0 chroma subsampling,
-  # which averages the red/green fringes that subpixel rendering paints on
-  # glyph edges into muddy color bands. Rendering grayscale-only (RGBA=none)
-  # with light hinting keeps edges on integer pixel boundaries, which the
-  # luma channel preserves faithfully — text stays sharp under bitrate
-  # adaptation. Writes to the xsettings channel so GTK + Qt both pick it up.
+  # Stream-friendly font hinting. Video codecs use 4:2:0 chroma subsampling,
+  # which smears the colour fringes subpixel rendering paints on glyph edges.
+  # Grayscale-only (RGBA=none) with light hinting keeps edges on integer pixel
+  # boundaries — text stays sharp under bitrate adaptation.
   environment.etc."xdg/autostart/xfce-font-hinting.desktop".text = ''
     [Desktop Entry]
     Type=Application
