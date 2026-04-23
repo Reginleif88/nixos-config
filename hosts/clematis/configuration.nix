@@ -8,7 +8,6 @@
     ../../modules/amdgpu.nix
     ../../modules/desktop-xfce.nix
     ../../modules/kasmvnc.nix
-    ../../modules/cloudflared.nix
     inputs.sops-nix.nixosModules.sops
   ];
 
@@ -101,6 +100,9 @@
         owner = "reginleif88";
       };
       "zlm_api_key" = {
+        owner = "reginleif88";
+      };
+      "kasmvnc_password" = {
         owner = "reginleif88";
       };
     };

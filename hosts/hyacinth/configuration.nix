@@ -10,7 +10,6 @@
     ../../modules/hyprland.nix
     ../../modules/virtualisation.nix
     ../../modules/gaming.nix
-    ../../modules/cloudflared.nix
     ../../modules/huion-ble.nix
     inputs.sops-nix.nixosModules.sops
   ];

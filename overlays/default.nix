@@ -98,16 +98,16 @@ final: prev:
       pixman
       stdenv.cc.cc.lib # libstdc++
       systemdLibs
-      xorg.libX11
-      xorg.libXau
-      xorg.libXcursor
-      xorg.libXdmcp
-      xorg.libXext
-      xorg.libXfixes
-      xorg.libXfont2
-      xorg.libXrandr
-      xorg.libXtst
-      xorg.libxshmfence
+      libx11
+      libxau
+      libxcursor
+      libxdmcp
+      libxext
+      libxfixes
+      libxfont_2
+      libxrandr
+      libxtst
+      libxshmfence
     ];
 
     # dpkg-deb's default unpackPhase leaves us with usr/{bin,lib,share}
@@ -171,8 +171,8 @@ final: prev:
           gnugrep
           procps
           nettools       # hostname
-          xorg.xauth
-          xorg.xkbcomp
+          xauth
+          xkbcomp
           xkeyboard_config
           which
         ])}

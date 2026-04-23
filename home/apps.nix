@@ -46,9 +46,8 @@ in
     })
   ]
   ++ lib.optionals (hostname == "clematis") [
-    pkgs.xfce.xfce4-screenshooter
+    pkgs.xfce4-screenshooter
     pkgs.copyq
-    pkgs.xfce.xfce4-whiskermenu-plugin
   ];
 
   # Point Playwright at Nix-managed browsers instead of downloading its own

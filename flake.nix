@@ -90,8 +90,8 @@
       };
     in
     {
-      nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/desktop;
-      nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/thinkpad;
-      nixosConfigurations.clematis = mkHost "clematis" ./hosts/vm;
+      nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/hyacinth;
+      nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/wisteria;
+      nixosConfigurations.clematis = mkHost "clematis" ./hosts/clematis;
     };
 }
