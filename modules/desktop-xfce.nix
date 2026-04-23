@@ -23,6 +23,17 @@ let
       all_plugins="$all_plugins $plugins"
     done
 
+    # Append an xkb layout indicator plugin. ID is max(existing) + 1 to
+    # avoid colliding with any plugin-N already registered in /plugins.
+    new_id=0
+    for p in $all_plugins; do
+      [ "$p" -gt "$new_id" ] && new_id=$p
+    done
+    new_id=$((new_id + 1))
+    ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+      -p /plugins/plugin-$new_id --create -t string -s "xkb"
+    all_plugins="$all_plugins $new_id"
+
     type_flags="" value_flags=""
     for p in $all_plugins; do
       [ -z "$p" ] && continue
@@ -74,7 +85,13 @@ in
       enable = true;
       enableScreensaver = false;
     };
-    xkb.layout = "us";
+    # Two layouts cycled with Alt+Shift; xfce4-xkb-plugin (added below to
+    # the panel) surfaces the current layout as a clickable indicator.
+    xkb = {
+      layout = "us,fr";
+      variant = ",";
+      options = "grp:alt_shift_toggle";
+    };
   };
 
   # Panel plugins have to live in the system profile so xfce4-panel
@@ -82,7 +99,10 @@ in
   # /etc/set-environment which pulls in /run/current-system/sw/share).
   # Installing via home-manager puts them in ~/.nix-profile/share which
   # the panel never scans under a custom-launched session.
-  environment.systemPackages = [ pkgs.xfce4-whiskermenu-plugin ];
+  environment.systemPackages = [
+    pkgs.xfce4-whiskermenu-plugin
+    pkgs.xfce4-xkb-plugin
+  ];
 
   # LightDM with autologin so an X session is always running for remote
   # capture. getty.autologinUser from login.nix handles non-graphical TTYs.
