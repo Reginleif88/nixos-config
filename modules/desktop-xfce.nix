@@ -1,9 +1,10 @@
 { pkgs, ... }:
 
 let
-  # Collapses the default two-panel layout into a single full-width bottom bar.
-  # Iterates all current panel IDs so it works regardless of numbering, then
-  # merges plugin-ids and removes every panel except panel-1.
+  # Collapses the default two-panel layout into a single full-width bottom bar,
+  # ensures an xkb layout indicator is present, then reorders plugins so
+  # info/status widgets anchor left and apps/launchers anchor right.
+  # Classification is by plugin type, making the script fully idempotent.
   mergePanelsScript = pkgs.writeShellScript "xfce-merge-panels" ''
     for i in $(seq 20); do
       ids=$(${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel -p /panels 2>/dev/null | grep -E '^[0-9]+$')
@@ -12,10 +13,8 @@ let
     done
     [ -z "$ids" ] && exit 1
 
-    panel_count=0
-    for id in $ids; do panel_count=$((panel_count + 1)); done
-    [ "$panel_count" -le 1 ] && exit 0
-
+    # Collect all plugin-ids across every current panel. Works on fresh
+    # install (two panels) and on subsequent boots (one merged panel).
     all_plugins=""
     for panel_id in $ids; do
       plugins=$(${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
@@ -23,16 +22,76 @@ let
       all_plugins="$all_plugins $plugins"
     done
 
-    # Append an xkb layout indicator plugin. ID is max(existing) + 1 to
-    # avoid colliding with any plugin-N already registered in /plugins.
-    new_id=0
-    for p in $all_plugins; do
-      [ "$p" -gt "$new_id" ] && new_id=$p
+    # Locate (or create) the xkb layout indicator plugin and track its ID
+    # so we can also set its display properties below.
+    xkb_id=""
+    for pid in $all_plugins; do
+      [ -z "$pid" ] && continue
+      ptype=$(${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel -p /plugins/plugin-$pid 2>/dev/null)
+      if [ "$ptype" = "xkb" ]; then xkb_id=$pid; break; fi
     done
-    new_id=$((new_id + 1))
+    if [ -z "$xkb_id" ]; then
+      max_id=0
+      for p in $all_plugins; do
+        [ -z "$p" ] && continue
+        [ "$p" -gt "$max_id" ] && max_id=$p
+      done
+      xkb_id=$((max_id + 1))
+      ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+        -p /plugins/plugin-$xkb_id --create -t string -s "xkb"
+      all_plugins="$all_plugins $xkb_id"
+    fi
+    # display-type=1 → text (layout code like "us"/"fr") instead of a flag
+    # image. group-policy=0 → same layout across all windows.
     ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
-      -p /plugins/plugin-$new_id --create -t string -s "xkb"
-    all_plugins="$all_plugins $new_id"
+      -p /plugins/plugin-$xkb_id/display-type --create -t uint -s 1
+    ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+      -p /plugins/plugin-$xkb_id/group-policy --create -t uint -s 0
+
+    # Reorder: classify each plugin by type, put apps/launchers on the left
+    # and info/status widgets on the right, with the expand separator between
+    # them. Classification is by type (not position), so running this
+    # repeatedly always converges on the same layout.
+    left_plugins="" right_plugins="" expand_id=""
+    for pid in $all_plugins; do
+      [ -z "$pid" ] && continue
+      ptype=$(${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel -p /plugins/plugin-$pid 2>/dev/null)
+      [ -z "$ptype" ] && continue
+      case "$ptype" in
+        applicationsmenu|whiskermenu|tasklist|launcher|directorymenu|showdesktop|pager|appfinder|windowmenu|quicklauncher)
+          left_plugins="$left_plugins $pid" ;;
+        clock|systray|statusnotifier|notification-plugin|notification-area|xkb|actions|pulseaudio|power-manager-plugin|battery|weather)
+          right_plugins="$right_plugins $pid" ;;
+        separator)
+          expand=$(${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel -p /plugins/plugin-$pid/expand 2>/dev/null)
+          if [ "$expand" = "true" ] && [ -z "$expand_id" ]; then
+            expand_id=$pid
+          fi
+          # Non-expand separators are dropped for a cleaner layout.
+          ;;
+        *)
+          left_plugins="$left_plugins $pid" ;;
+      esac
+    done
+
+    # If no expand separator exists, fabricate one so the two groups actually
+    # anchor to opposite edges instead of collapsing together on the left.
+    if [ -z "$expand_id" ]; then
+      max_id=0
+      for p in $all_plugins; do
+        [ -z "$p" ] && continue
+        [ "$p" -gt "$max_id" ] && max_id=$p
+      done
+      expand_id=$((max_id + 1))
+      ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+        -p /plugins/plugin-$expand_id --create -t string -s "separator"
+      ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+        -p /plugins/plugin-$expand_id/expand --create -t bool -s true
+      ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+        -p /plugins/plugin-$expand_id/style --create -t uint -s 0
+    fi
+
+    all_plugins="$left_plugins $expand_id $right_plugins"
 
     type_flags="" value_flags=""
     for p in $all_plugins; do
@@ -43,12 +102,20 @@ let
 
     ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
       -p /panels/panel-1/plugin-ids --create $type_flags $value_flags
+    # --force-array (-a) is critical: without it, xfconf-query flattens a
+    # single-element array to a scalar int, which breaks /panels parsing.
     ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
-      -p /panels --create -t int -s 1
+      -p /panels --create -a -t int -s 1
     ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
       -p /panels/panel-1/position -s "p=10;x=0;y=0"
     ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
       -p /panels/panel-1/length -s 100
+    # Default panel-1 ships with size=26 / icon-size=16, which is cramped
+    # over a scaled VNC stream. Bumping both makes targets legible.
+    ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+      -p /panels/panel-1/size --create -t uint -s 54
+    ${pkgs.xfconf}/bin/xfconf-query -c xfce4-panel \
+      -p /panels/panel-1/icon-size --create -t uint -s 33
 
     ${pkgs.xfce4-panel}/bin/xfce4-panel -r 2>/dev/null || true
   '';
@@ -62,6 +129,8 @@ let
       [ -n "$paths" ] && break
       sleep 0.5
     done
+
+    # Update any paths xfdesktop has already registered.
     for p in $(${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop -l 2>/dev/null | grep "/image-style$"); do
       ${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop -p "$p" -s 0
     done
@@ -72,6 +141,24 @@ let
       ${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop -p "$p" \
         --create -t double -t double -t double -t double -s 0.0 -s 0.0 -s 0.0 -s 1.0
     done
+
+    # Fallback: force-write the common monitor/workspace paths. If xfdesktop
+    # hadn't registered its keys yet (happens in some KasmVNC sessions), the
+    # loops above no-op. Writing speculative paths is harmless — xfdesktop
+    # ignores monitor names that don't match a real RandR output.
+    for mon in VNC-0 VNC0 screen screen0 0; do
+      for ws in 0 1 2 3; do
+        base="/backdrop/screen0/monitor$mon/workspace$ws"
+        ${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop \
+          -p "$base/image-style" --create -t int -s 0
+        ${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop \
+          -p "$base/color-style" --create -t int -s 0
+        ${pkgs.xfconf}/bin/xfconf-query -c xfce4-desktop -p "$base/rgba1" \
+          --create -t double -t double -t double -t double -s 0.0 -s 0.0 -s 0.0 -s 1.0
+      done
+    done
+
+    ${pkgs.xfdesktop}/bin/xfdesktop --reload 2>/dev/null || true
   '';
 in
 
@@ -120,6 +207,20 @@ in
     Option "StandbyTime" "0"
     Option "SuspendTime" "0"
     Option "OffTime" "0"
+  '';
+
+  # services.xserver.xkb only writes /etc/X11/xorg.conf.d/, which Xkasmvnc
+  # doesn't read — it spawns its own X server with a single default layout.
+  # setxkbmap at session start injects both layouts so the xkb plugin and
+  # the Alt+Shift toggle actually see us *and* fr.
+  environment.etc."xdg/autostart/xfce-keyboard-layouts.desktop".text = ''
+    [Desktop Entry]
+    Type=Application
+    Name=Configure keyboard layouts
+    Exec=${pkgs.xorg.setxkbmap}/bin/setxkbmap -layout us,fr -option "" -option grp:alt_shift_toggle
+    OnlyShowIn=XFCE;
+    X-GNOME-Autostart-enabled=true
+    NoDisplay=true
   '';
 
   # Force xfwm4's compositor off every session. The dotfile already sets
