@@ -27,17 +27,7 @@
     gst_all_1.gst-libav
     ntfs3g
     pandoc
-    (texlive.combine {
-      inherit (texlive)
-        scheme-medium
-        collection-langfrench
-        collection-fontsrecommended
-        titlesec
-        mdframed
-        zref
-        needspace
-        ;
-    })
+    texliveFull
   ];
 
   # NTFS support for mounting secondary drives

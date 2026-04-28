@@ -80,7 +80,7 @@
   users.users.reginleif88 = {
     isNormalUser = true;
     description = "reginleif88";
-    extraGroups = [ "wheel" "networkmanager" "video" "audio" "uinput" ];
+    extraGroups = [ "wheel" "networkmanager" "video" "render" "audio" "uinput" ];
     shell = pkgs.zsh;
   };
 

@@ -17,8 +17,8 @@ let
   systemConfig = pkgs.writeText "kasmvnc.yaml" ''
     desktop:
       resolution:
-        width: 1920
-        height: 1080
+        width: 1600
+        height: 900
       allow_resize: true
       pixel_depth: 24
       # This VM has AMD Barcelo iGPU passthrough with /dev/dri/renderD128
@@ -98,6 +98,11 @@ let
     unset DBUS_SESSION_BUS_ADDRESS
     export XDG_SESSION_TYPE=x11
     export XDG_CURRENT_DESKTOP=XFCE
+
+    # Seed Xresources with a 120 DPI hint so raw X11 apps (kitty, xterm,
+    # etc.) scale their fonts to match the GTK/xfconf setting below.
+    echo "Xft.dpi: 120" | ${pkgs.xorg.xrdb}/bin/xrdb -merge -
+
     exec ${pkgs.xfce4-session}/bin/xfce4-session
   '';
 in
@@ -146,6 +151,7 @@ in
       xfce4-panel
       xfce4-settings
       dbus
+      xorg.xrdb
     ];
 
     # Re-start the unit whenever the YAML, xstartup, or password-file

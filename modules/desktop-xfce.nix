@@ -269,7 +269,7 @@ in
     [Desktop Entry]
     Type=Application
     Name=Stream-friendly font hinting
-    Exec=${pkgs.bash}/bin/bash -c '${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/RGBA -s none; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Hinting -s true; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/HintStyle -s hintslight; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Antialias -s true'
+    Exec=${pkgs.bash}/bin/bash -c '${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/DPI -s 120; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/RGBA -s none; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Hinting -s true; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/HintStyle -s hintslight; ${pkgs.xfconf}/bin/xfconf-query -c xsettings -p /Xft/Antialias -s true'
     OnlyShowIn=XFCE;
     X-GNOME-Autostart-enabled=true
     NoDisplay=true
