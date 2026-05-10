@@ -30,26 +30,32 @@ let
   };
 in
 {
-  # Hyprland user config
+  # Hyprland user config (Hyprland 0.55+: Lua-based)
   wayland.windowManager.hyprland = {
     enable = true;
     package = hyprlandPkg;
-    # Load gruvbar at parse time (not via post-init `hyprctl plugin load`),
-    # so its `plugin:gruvbar:*` typed values are registered before
-    # postConfigReload's CPropRefresher walks them. Required since Hyprland v0.54.0.
-    extraConfig = ''
-      plugin = ${gruvbar}/lib/libgruvbar.so
-      source = ~/.config/hypr/hyprland-custom.conf
-    '';
   };
 
   # Place Hyprland config files
   xdg.configFile = {
-    "hypr/hyprland-custom.conf".source = ../dotfiles/hypr/hyprland.conf;
-    "hypr/env.conf".source = ../dotfiles/hypr/hosts/${hostname}/env.conf;
-    "hypr/monitors.conf".source = ../dotfiles/hypr/hosts/${hostname}/monitors.conf;
-    "hypr/workspaces.conf".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.conf;
-    "hypr/settings.conf".source = ../dotfiles/hypr/hosts/${hostname}/settings.conf;
+    # Lua config (active path under Hyprland 0.55+)
+    "hypr/hyprland.lua".source       = ../dotfiles/hypr/hyprland.lua;
+    "hypr/look_and_feel.lua".source  = ../dotfiles/hypr/look_and_feel.lua;
+    "hypr/input.lua".source          = ../dotfiles/hypr/input.lua;
+    "hypr/binds.lua".source          = ../dotfiles/hypr/binds.lua;
+    "hypr/window_rules.lua".source   = ../dotfiles/hypr/window_rules.lua;
+    "hypr/autostart.lua".source      = ../dotfiles/hypr/autostart.lua;
+    "hypr/gruvbar.lua".source        = ../dotfiles/hypr/gruvbar.lua;
+    # Generated stub so the user-edited gruvbar.lua doesn't carry a /nix/store hash.
+    "hypr/gruvbar_path.lua".text     = ''return "${gruvbar}/lib/libgruvbar.so"'';
+
+    # Per-host overlays — flattened so the entry point can plain require() them.
+    "hypr/env.lua".source        = ../dotfiles/hypr/hosts/${hostname}/env.lua;
+    "hypr/monitors.lua".source   = ../dotfiles/hypr/hosts/${hostname}/monitors.lua;
+    "hypr/workspaces.lua".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.lua;
+    "hypr/settings.lua".source   = ../dotfiles/hypr/hosts/${hostname}/settings.lua;
+
+    # Hyprpaper (separate program, unaffected by the Lua migration)
     "hypr/hyprpaper.conf".source = ../dotfiles/hypr/hyprpaper.conf;
     "hypr/backgrounds/rainynight.png".source = ../dotfiles/hypr/backgrounds/rainynight.png;
   };
