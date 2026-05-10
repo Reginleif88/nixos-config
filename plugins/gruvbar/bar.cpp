@@ -9,6 +9,8 @@
 #include <hyprland/src/managers/input/InputManager.hpp>
 #undef private
 #include <hyprland/src/managers/KeybindManager.hpp>
+#include <hyprland/src/managers/input/InputManager.hpp>
+#include <hyprland/src/layout/LayoutManager.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/protocols/wlr-layer-shell-unstable-v1.hpp>
 #include <pango/pangocairo.h>
@@ -436,7 +438,11 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
         m_bCancelledDown = false;
 
         if (m_bDragging) {
-            g_pKeybindManager->m_dispatchers["mouse"]("0movewindow");
+            // End the drag we started in onMouseMove. Calling endDragTarget directly
+            // (vs. the "mouse:0movewindow" dispatcher) is symmetric with how we
+            // started the drag and avoids the dispatcher's "no drag in progress" guard.
+            if (g_layoutManager && g_layoutManager->dragController() && g_layoutManager->dragController()->target())
+                g_layoutManager->endDragTarget();
             m_bDragging = false;
         }
         m_bDragPending = false;
@@ -482,14 +488,32 @@ void CBar::onMouseMove(Vector2D coords) {
 
     if (m_bDragPending && !m_bDragging) {
         m_bDragPending = false;
-        m_bDragging    = true;
-        g_pKeybindManager->m_dispatchers["mouse"]("1movewindow");
+
+        const auto PWINDOW = m_pWindow.lock();
+        if (!PWINDOW)
+            return;
+
+        // Bypass the "mouse:1movewindow" dispatcher: it calls
+        // `vectorToWindowUnified` at the cursor to *find* a window, then walks
+        // decos via `checkInputOnDecos(INPUT_TYPE_DRAG_START)` and aborts if any
+        // returns true. Our deco *is* the cursor target, so that lookup is
+        // wasted at best and racy at worst. We already know exactly which
+        // window the user is dragging — go straight to the drag controller.
+        if (g_layoutManager && PWINDOW->layoutTarget()) {
+            g_layoutManager->beginDragTarget(PWINDOW->layoutTarget(), MBIND_MOVE);
+            m_bDragging = true;
+        }
     }
 }
 
 bool CBar::onInputOnDeco(const eInputType type, const Vector2D& coords, std::any data) {
-    // Only consume button and drag events; let axis (scroll) and motion pass through
-    if (type != INPUT_TYPE_BUTTON && type != INPUT_TYPE_DRAG_START && type != INPUT_TYPE_DRAG_END)
+    // Only suppress raw button click-through to the underlying surface.
+    // DRAG_START / DRAG_END must NOT be consumed: Hyprland calls those on every
+    // deco when starting/finishing a window drag (KeybindManager::changeMouseBindMode,
+    // DragController::endDrag) and treats `true` as "this deco absorbed the drag,
+    // abort it" — which would block our own mouse:1movewindow dispatch and any
+    // drop-into-tile logic when releasing on another window's bar.
+    if (type != INPUT_TYPE_BUTTON)
         return false;
 
     static auto* const PHEIGHT = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();

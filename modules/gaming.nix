@@ -19,4 +19,8 @@ in
 
   # 32-bit graphics support (required by Steam)
   hardware.graphics.enable32Bit = true;
+
+  # Bolt: native Linux Jagex Launcher (CEF-based, no Wine) that handles
+  # Jagex account OAuth and launches RuneLite natively.
+  environment.systemPackages = with pkgs; [ bolt-launcher ];
 }

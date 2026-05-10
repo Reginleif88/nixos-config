@@ -2,6 +2,7 @@
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/event/EventBus.hpp>
+#include <hyprland/src/config/shared/parserUtils/ParserUtils.hpp>
 #include <hyprutils/string/VarList2.hpp>
 
 #include "bar.hpp"
@@ -50,15 +51,15 @@ Hyprlang::CParseResult onNewButton(const char* K, const char* V) {
         return result;
     }
 
-    auto bgcolor = configStringToInt(std::string(vars[0]));
+    auto bgcolor = Config::ParserUtils::parseColor(std::string(vars[0]));
     if (!bgcolor) {
         result.setError("invalid bgcolor");
         return result;
     }
 
-    auto fgcolor = configStringToInt("rgb(ffffff)");
+    auto fgcolor = Config::ParserUtils::parseColor("rgb(ffffff)");
     if (vars.size() >= 5) {
-        fgcolor = configStringToInt(std::string(vars[4]));
+        fgcolor = Config::ParserUtils::parseColor(std::string(vars[4]));
         if (!fgcolor) {
             result.setError("invalid fgcolor");
             return result;
@@ -97,9 +98,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     g_pGlobalState = makeUnique<SGlobalState>();
 
     // Register config values
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_color",                   Hyprlang::INT{*configStringToInt("rgba(282828ff)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_color",                   Hyprlang::INT{*Config::ParserUtils::parseColor("rgba(282828ff)")});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_height",                  Hyprlang::INT{28});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:col.text",                    Hyprlang::INT{*configStringToInt("rgba(ebdbb2ff)")});
+    HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:col.text",                    Hyprlang::INT{*Config::ParserUtils::parseColor("rgba(ebdbb2ff)")});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_text_size",               Hyprlang::INT{12});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_text_font",               Hyprlang::STRING{"Sans"});
     HyprlandAPI::addConfigValue(PHANDLE, "plugin:gruvbar:bar_text_align",              Hyprlang::STRING{"center"});
