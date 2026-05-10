@@ -39,15 +39,14 @@ CBar::~CBar() {
 // ─── Positioning ─────────────────────────────────────────────────────────────
 
 SDecorationPositioningInfo CBar::getPositioningInfo() {
-    static auto* const PHEIGHT     = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
-    static auto* const PPRECEDENCE = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_precedence_over_border")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
     SDecorationPositioningInfo info;
     info.policy         = DECORATION_POSITION_STICKY;
     info.edges          = DECORATION_EDGE_TOP;
-    info.priority       = **PPRECEDENCE ? 10005 : 5000;
+    info.priority       = cfg.precedenceOverBorder->value() ? 10005 : 5000;
     info.reserved       = true;
-    info.desiredExtents = {{0, (int)**PHEIGHT}, {0, 0}};
+    info.desiredExtents = {{0, (int)cfg.barHeight->value()}, {0, 0}};
     return info;
 }
 
@@ -98,15 +97,14 @@ void CBar::updateWindow(PHLWINDOW pWindow) {
     if (!PMONITOR)
         return;
 
-    static auto* const PHEIGHT      = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
-    static auto* const PENABLETITLE = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_title_enabled")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
     const auto scale = PMONITOR->m_scale;
     const auto DECOBOX = assignedBoxGlobal();
     if (DECOBOX.w < 1 || DECOBOX.h < 1)
         return;
 
-    const Vector2D bufferSize = {DECOBOX.w * scale, (double)**PHEIGHT * scale};
+    const Vector2D bufferSize = {DECOBOX.w * scale, (double)cfg.barHeight->value() * scale};
     if (bufferSize.x < 1 || bufferSize.y < 1)
         return;
 
@@ -115,7 +113,7 @@ void CBar::updateWindow(PHLWINDOW pWindow) {
         m_szLastTitle = PWINDOW->m_title;
 
     // Recreate title texture when needed
-    if (**PENABLETITLE && (titleChanged || m_bWindowSizeChanged || !m_pTextTex))
+    if (cfg.titleEnabled->value() && (titleChanged || m_bWindowSizeChanged || !m_pTextTex))
         renderBarTitle(bufferSize, scale);
 
     // Recreate button texture when needed
@@ -135,26 +133,22 @@ void CBar::damageEntire() {
 // ─── Text rendering (Cairo/Pango → texture) ─────────────────────────────────
 
 void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
-    static auto* const PCOLOR    = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:col.text")->getDataStaticPtr();
-    static auto* const PSIZE     = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_text_size")->getDataStaticPtr();
-    static auto* const PFONT     = (Hyprlang::STRING const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_text_font")->getDataStaticPtr();
-    static auto* const PALIGN    = (Hyprlang::STRING const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_text_align")->getDataStaticPtr();
-    static auto* const PPADDING  = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_padding")->getDataStaticPtr();
-    static auto* const PBTNPAD   = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_button_padding")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
     const auto PWINDOW = m_pWindow.lock();
     if (!PWINDOW)
         return;
 
-    const CHyprColor COLOR = CHyprColor(**PCOLOR);
+    const CHyprColor COLOR = CHyprColor((uint64_t)cfg.textColor->value());
 
     // Compute button space for text clipping
-    float buttonSpace = **PBTNPAD;
+    const auto btnPad = cfg.buttonPadding->value();
+    float buttonSpace = btnPad;
     for (auto& b : g_pGlobalState->buttons)
-        buttonSpace += b.size + **PBTNPAD;
+        buttonSpace += b.size + btnPad;
 
-    const auto scaledSize    = **PSIZE * scale;
-    const auto scaledPadding = **PPADDING * scale;
+    const auto scaledSize     = cfg.textSize->value() * scale;
+    const auto scaledPadding  = cfg.padding->value() * scale;
     const auto scaledBtnSpace = buttonSpace * scale;
 
     // Cairo surface for text rendering
@@ -170,7 +164,8 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
     PangoLayout* layout = pango_cairo_create_layout(CAIRO);
     pango_layout_set_text(layout, m_szLastTitle.c_str(), -1);
 
-    PangoFontDescription* fontDesc = pango_font_description_from_string(*PFONT);
+    const auto fontStr = cfg.textFont->value();
+    PangoFontDescription* fontDesc = pango_font_description_from_string(fontStr.c_str());
     pango_font_description_set_size(fontDesc, scaledSize * PANGO_SCALE);
     pango_layout_set_font_description(layout, fontDesc);
     pango_font_description_free(fontDesc);
@@ -184,7 +179,7 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
     int layoutWidth, layoutHeight;
     pango_layout_get_size(layout, &layoutWidth, &layoutHeight);
 
-    const bool isCenter = std::string{*PALIGN} != "left";
+    const bool isCenter = cfg.textAlign->value() != "left";
     const int  xOffset  = isCenter
         ? std::round(bufferSize.x / 2.0 - layoutWidth / PANGO_SCALE / 2.0)
         : std::round(scaledPadding + scaledBtnSpace);
@@ -206,11 +201,9 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
 // ─── Button rendering (Cairo circles → texture) ─────────────────────────────
 
 void CBar::renderBarButtons(const Vector2D& bufferSize, float scale) {
-    static auto* const PBTNPAD = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_button_padding")->getDataStaticPtr();
-    static auto* const PPADDING = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_padding")->getDataStaticPtr();
-    static auto* const PALIGN  = (Hyprlang::STRING const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_buttons_alignment")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
-    const bool BUTTONSRIGHT = std::string{*PALIGN} != "left";
+    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() != "left";
 
     const auto CAIROSURFACE = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, bufferSize.x, bufferSize.y);
     const auto CAIRO        = cairo_create(CAIROSURFACE);
@@ -220,12 +213,12 @@ void CBar::renderBarButtons(const Vector2D& bufferSize, float scale) {
     cairo_paint(CAIRO);
     cairo_restore(CAIRO);
 
-    static auto* const PFONT = (Hyprlang::STRING const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_text_font")->getDataStaticPtr();
+    const auto fontStr = cfg.textFont->value();
 
-    int offset = **PPADDING * scale;
+    int offset = cfg.padding->value() * scale;
     for (auto& button : g_pGlobalState->buttons) {
         const auto scaledSize = button.size * scale;
-        const auto scaledPad  = **PBTNPAD * scale;
+        const auto scaledPad  = cfg.buttonPadding->value() * scale;
 
         const auto pos = Vector2D{
             BUTTONSRIGHT ? bufferSize.x - offset - scaledSize / 2.0 : offset + scaledSize / 2.0,
@@ -242,7 +235,7 @@ void CBar::renderBarButtons(const Vector2D& bufferSize, float scale) {
             PangoLayout* layout = pango_cairo_create_layout(CAIRO);
             pango_layout_set_text(layout, button.icon.c_str(), -1);
 
-            PangoFontDescription* fontDesc = pango_font_description_from_string(*PFONT);
+            PangoFontDescription* fontDesc = pango_font_description_from_string(fontStr.c_str());
             pango_font_description_set_size(fontDesc, scaledSize * 0.6 * PANGO_SCALE);
             pango_layout_set_font_description(layout, fontDesc);
             pango_font_description_free(fontDesc);
@@ -278,15 +271,13 @@ void CBar::draw(PHLMONITOR pMonitor, float const& a) {
     if (!PWINDOW)
         return;
 
-    static auto* const PCOLOR       = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_color")->getDataStaticPtr();
-    static auto* const PHEIGHT      = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
-    static auto* const PPRECEDENCE  = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_precedence_over_border")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
-    if (**PHEIGHT < 1)
+    if (cfg.barHeight->value() < 1)
         return;
 
     const auto DECOBOX  = assignedBoxGlobal();
-    const auto ROUNDING = PWINDOW->rounding() + (**PPRECEDENCE ? 0 : PWINDOW->getRealBorderSize());
+    const auto ROUNDING = PWINDOW->rounding() + (cfg.precedenceOverBorder->value() ? 0 : PWINDOW->getRealBorderSize());
     const auto scaledRounding = ROUNDING > 0 ? (int)(ROUNDING * pMonitor->m_scale) : 0;
 
     // Bar background box (monitor-local, scaled)
@@ -302,7 +293,7 @@ void CBar::draw(PHLMONITOR pMonitor, float const& a) {
         return;
 
     // 1) Bar background rectangle
-    CHyprColor barColor(**PCOLOR);
+    CHyprColor barColor((uint64_t)cfg.barColor->value());
     barColor.a *= a;
 
     CRectPassElement::SRectData rectData;
@@ -366,22 +357,21 @@ bool CBar::isLayerSurfaceAbove() {
 }
 
 bool CBar::doButtonPress(Vector2D coords) {
-    static auto* const PBTNPAD  = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_button_padding")->getDataStaticPtr();
-    static auto* const PPADDING = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_padding")->getDataStaticPtr();
-    static auto* const PHEIGHT  = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
-    static auto* const PALIGN   = (Hyprlang::STRING const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_buttons_alignment")->getDataStaticPtr();
+    const auto& cfg = g_pGlobalState->cfg;
 
-    const bool BUTTONSRIGHT = std::string{*PALIGN} != "left";
-    float offset = **PPADDING;
+    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() != "left";
+    float offset = cfg.padding->value();
+    const auto btnPad = cfg.buttonPadding->value();
+    const auto barH   = (double)cfg.barHeight->value();
 
     for (auto& b : g_pGlobalState->buttons) {
-        const auto BARBUF = Vector2D{assignedBoxGlobal().w, (double)**PHEIGHT};
+        const auto BARBUF = Vector2D{assignedBoxGlobal().w, barH};
         Vector2D   btnPos = Vector2D{
-            BUTTONSRIGHT ? BARBUF.x - **PBTNPAD - b.size - offset : offset,
+            BUTTONSRIGHT ? BARBUF.x - btnPad - b.size - offset : offset,
             (BARBUF.y - b.size) / 2.0
         }.floor();
 
-        if (coords.x >= btnPos.x && coords.x <= btnPos.x + b.size + **PBTNPAD &&
+        if (coords.x >= btnPos.x && coords.x <= btnPos.x + b.size + btnPad &&
             coords.y >= btnPos.y && coords.y <= btnPos.y + b.size) {
             if (!b.cmd.empty()) {
                 // If the command is "hyprctl dispatch X Y", call the dispatcher
@@ -416,7 +406,7 @@ bool CBar::doButtonPress(Vector2D coords) {
             return true;
         }
 
-        offset += **PBTNPAD + b.size;
+        offset += btnPad + b.size;
     }
 
     return false;
@@ -427,7 +417,7 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
     if (!PWINDOW || !PWINDOW->m_workspace || !PWINDOW->m_workspace->isVisible())
         return;
 
-    static auto* const PHEIGHT = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
+    const auto barH = (double)g_pGlobalState->cfg.barHeight->value();
 
     const auto COORDS = cursorRelativeToBar();
 
@@ -450,7 +440,7 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
     }
 
     // Press — check if cursor is within our bar
-    if (COORDS.x < 0 || COORDS.y < 0 || COORDS.x > assignedBoxGlobal().w || COORDS.y > **PHEIGHT)
+    if (COORDS.x < 0 || COORDS.y < 0 || COORDS.x > assignedBoxGlobal().w || COORDS.y > barH)
         return;
 
     // Don't consume clicks if our window is occluded by another window
@@ -516,10 +506,10 @@ bool CBar::onInputOnDeco(const eInputType type, const Vector2D& coords, std::any
     if (type != INPUT_TYPE_BUTTON)
         return false;
 
-    static auto* const PHEIGHT = (Hyprlang::INT* const*)HyprlandAPI::getConfigValue(PHANDLE, "plugin:gruvbar:bar_height")->getDataStaticPtr();
+    const auto barH = (double)g_pGlobalState->cfg.barHeight->value();
 
     // Bounds check — coords are relative to the decoration's assigned box
-    if (coords.x < 0 || coords.y < 0 || coords.x > assignedBoxGlobal().w || coords.y > **PHEIGHT)
+    if (coords.x < 0 || coords.y < 0 || coords.x > assignedBoxGlobal().w || coords.y > barH)
         return false;
 
     // Don't intercept clicks on layer surfaces above us (e.g. notification panels)
