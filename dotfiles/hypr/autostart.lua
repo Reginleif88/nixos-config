@@ -16,7 +16,7 @@ hl.on("hyprland.start", function()
 
   -- Wait for the Proton Mail window to actually appear before parking it.
   hl.timer(function()
-    hl.exec_cmd([[hyprctl dispatch movetoworkspacesilent "special:minimized,title:Proton Mail"]])
+    hl.dispatch(hl.dsp.window.move({ workspace = "special:minimized", silent = true, window = "title:Proton Mail" }))
   end, { timeout = 5000, type = "oneshot" })
 
   hl.timer(function()

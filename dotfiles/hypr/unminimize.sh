@@ -63,4 +63,4 @@ addr="${selected%%|*}"
 
 # Get current workspace and move the window there
 ws=$(hyprctl activeworkspace -j | jq -r '.id')
-hyprctl dispatch movetoworkspace "$ws,address:$addr"
+hyprctl dispatch "hl.dsp.window.move({ workspace = $ws, window = \"address:$addr\" })"

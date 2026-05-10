@@ -24,7 +24,7 @@ if [ "$should_tray" = false ]; then
 fi
 
 if [ "$should_tray" = true ]; then
-    hyprctl dispatch movetoworkspacesilent "special:minimized"
+    hyprctl dispatch 'hl.dsp.window.move({ workspace = "special:minimized", silent = true })'
 else
-    hyprctl dispatch killactive
+    hyprctl dispatch 'hl.dsp.window.close()'
 fi
