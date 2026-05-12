@@ -4,11 +4,12 @@ let
   system = pkgs.stdenv.hostPlatform.system;
 in
 {
-  # Node.js (replaces NVM), Bun, Gemini CLI, Claude Code
+  # Node.js (replaces NVM), Bun, Gemini CLI, Codex CLI, Claude Code
   home.packages = with pkgs; [
     nodejs
     bun
     gemini-cli
+    codex
     jq  # used by statusline.sh
     inputs.claude-code.packages.${system}.default
   ];

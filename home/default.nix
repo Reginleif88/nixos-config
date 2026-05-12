@@ -1,11 +1,14 @@
 { config, pkgs, inputs, hostname, lib, ... }:
 
 let
-  # Hosts running the Hyprland Wayland compositor (gets hyprland + quickshell)
-  isHyprland = builtins.elem hostname [ "hyacinth" "wisteria" ];
+  # Hosts running the Hyprland Wayland compositor (gets hyprland + quickshell).
+  # clematis runs headless Hyprland under wayvnc — same compositor, no
+  # physical display — so it gets the same home-manager stack.
+  isHyprland = builtins.elem hostname [ "hyacinth" "wisteria" "clematis" ];
   # Hosts with any graphical desktop (gets desktop apps + browser).
-  # clematis runs XFCE on X11, hyacinth/wisteria run Hyprland.
-  isGraphical = isHyprland || builtins.elem hostname [ "clematis" ];
+  # Currently redundant with isHyprland but kept as a predicate in case a
+  # future host wants graphical apps without the Hyprland compositor.
+  isGraphical = isHyprland;
 in
 {
   imports = [

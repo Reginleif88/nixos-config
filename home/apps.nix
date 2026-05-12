@@ -44,10 +44,6 @@ in
           --set SDL_VIDEODRIVER x11
       '';
     })
-  ]
-  ++ lib.optionals (hostname == "clematis") [
-    pkgs.xfce4-screenshooter
-    pkgs.copyq
   ];
 
   # Point Playwright at Nix-managed browsers instead of downloading its own
@@ -140,46 +136,4 @@ in
     ln -sfn "$repo" "$dir"
   '';
 
-  # XFCE config files. On clematis (an XFCE host), xfconfd reads each
-  # channel XML at session start, then writes its in-memory state back to
-  # disk as a *regular file* — silently destroying any home-manager symlink
-  # to the read-only Nix store. Worse, it merges its old cached state on
-  # top, producing structurally invalid XML over successive logins.
-  #
-  # Workaround: kill xfconfd, then copy (not symlink) the files. xfconfd
-  # restarts on demand and reads our fresh content; future GUI tweaks are
-  # transient and get overwritten on the next home-manager activation.
-  #
-  # On hyacinth/wisteria (Hyprland hosts) xfconfd never runs, so a normal
-  # symlink is fine and avoids the rsync overhead.
-  xdg.configFile = lib.optionalAttrs (hostname != "clematis") {
-    "xfce4" = {
-      source = ../dotfiles/xfce4;
-      recursive = true;
-      force = true;
-    };
-  };
-
-  home.activation.xfce4-config = lib.mkIf (hostname == "clematis") (
-    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      # Kill every XFCE process that caches xfconf state and writes it
-      # back. xfce4-panel saves its complete in-memory tree to xfconfd
-      # on exit, xfsettingsd does the same for /xsettings and xfwm4
-      # keybindings — so killing only xfconfd lets them respawn it with
-      # stale state and overwrite what we just copied. Kill all three.
-      ${pkgs.procps}/bin/pkill -u $USER -x xfce4-panel   2>/dev/null || true
-      ${pkgs.procps}/bin/pkill -u $USER -x xfsettingsd   2>/dev/null || true
-      ${pkgs.procps}/bin/pkill -u $USER -f xfconfd       2>/dev/null || true
-      sleep 1
-
-      # Wipe the panel XML outright before copy — if xfconfd already
-      # merged legacy + modern schemas into a malformed file, rsync
-      # will overwrite but xattrs on the existing inode can survive.
-      # A clean rm sidesteps the whole class of ghost-state issues.
-      rm -f "$HOME/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml"
-
-      ${pkgs.rsync}/bin/rsync -rL --chmod=u+w --exclude='*.hm-backup' \
-        ${../dotfiles/xfce4}/ "$HOME/.config/xfce4/"
-    ''
-  );
 }

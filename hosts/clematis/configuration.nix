@@ -6,16 +6,10 @@
     ../../modules/security.nix
     ../../modules/login.nix
     ../../modules/amdgpu.nix
-    ../../modules/desktop-xfce.nix
-    ../../modules/kasmvnc.nix
+    ../../modules/hyprland.nix
+    ../../modules/wayvnc.nix
     inputs.sops-nix.nixosModules.sops
   ];
-
-  # KasmVNC owns its own Xkasmvnc display (:1) — LightDM and autologin
-  # (set by desktop-xfce.nix for the Sunshine/X-capture setup) would
-  # compete for a real X server we no longer have, so suppress them.
-  services.xserver.displayManager.lightdm.enable = lib.mkForce false;
-  services.displayManager.autoLogin.enable = lib.mkForce false;
 
   # Bootloader: systemd-boot on UEFI/GPT (Q35 + OVMF on Proxmox).
   # Requires the VM to be (re)created with `machine: q35` and `bios: ovmf`
@@ -102,7 +96,16 @@
       "zlm_api_key" = {
         owner = "reginleif88";
       };
-      "kasmvnc_password" = {
+      "wayvnc_password" = {
+        owner = "reginleif88";
+      };
+      "cloudflare_dns_token" = {
+        # Read by lego (the ACME DNS-01 backend). File must contain
+        # ONLY the raw Cloudflare API token — no `KEY=` prefix. The
+        # token needs `Zone:DNS:Edit` scoped to the relevant zone.
+        owner = "acme";
+      };
+      "keyring_password" = {
         owner = "reginleif88";
       };
     };
