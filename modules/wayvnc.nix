@@ -45,6 +45,25 @@ in
     wireplumber.enable = true;
   };
 
+  # ── Seat manager (libseat → seatd, in VT-less mode) ─────────────────
+  # Aquamarine's GBM allocator needs an open /dev/dri/card0 fd, even on
+  # headless outputs. card0 requires seat-mediated access; seatd is the
+  # only thing on a headless VM that can provide it (logind would too,
+  # but only for an "active" session on a real VT, which we don't have).
+  #
+  # Default seatd creates VT-bound seats: the seat is "active" only
+  # when its tty is the foreground console. With no foreground VT in a
+  # Proxmox guest, Hyprland's DRM session would never activate and the
+  # compositor would refuse to render frames ("Attempted to render
+  # frame on inactive session!").
+  #
+  # SEATD_VTBOUND=0 (documented in seatd(1)) tells seatd to skip VT
+  # binding entirely. The resulting seat is *always active*, devices
+  # get handed out as soon as a client connects, and Hyprland gets
+  # drmMaster without needing a foreground VT.
+  services.seatd.enable = true;
+  systemd.services.seatd.serviceConfig.Environment = [ "SEATD_VTBOUND=0" ];
+
   # ── ACME / Let's Encrypt via Cloudflare DNS-01 ──────────────────────
   # DNS-01 avoids needing a public-facing port 80 for the HTTP-01
   # challenge. The cloudflare_dns_token sops secret must contain the
@@ -56,7 +75,9 @@ in
   # serving ${hostname}. Generate at
   # https://dash.cloudflare.com/profile/api-tokens.
   users.groups.${certGroup} = {};
-  users.users.${user}.extraGroups = [ certGroup ];
+  # `seat` lets the user reach /dev/dri/card0 via seatd; `${certGroup}`
+  # lets websockify read fullchain.pem/key.pem from /var/lib/acme.
+  users.users.${user}.extraGroups = [ "seat" certGroup ];
 
   security.acme = {
     acceptTerms = true;
@@ -78,26 +99,29 @@ in
   networking.firewall.allowedTCPPorts = [ 443 ];
 
   # ── Headless Hyprland session ───────────────────────────────────────
-  # WLR_BACKENDS=headless makes wlroots create no real outputs; the
-  # virtual HEADLESS-1 monitor is spawned in dotfiles/hypr/hosts/
-  # clematis/monitors.lua via `hyprctl output create headless`.
+  # Hyprland 0.55+ uses Aquamarine, which requests the HEADLESS backend
+  # as MANDATORY (Compositor.cpp:316) but also probes DRM as
+  # REQUEST_IF_AVAILABLE — and the GBM allocator backing the headless
+  # backend needs a real DRM device fd, so DRM has to succeed for the
+  # whole thing to come up. seatd (above, in VT-less mode) provides
+  # that fd; the user is added to the `seat` group to reach the socket.
   #
   # PAMName=login is the systemd trick that gets logind to provision
   # /run/user/${uid} with the right ownership and XDG_RUNTIME_DIR,
-  # without needing user-mode systemd / lingering.
+  # without needing user-mode systemd / lingering. The seat itself
+  # comes from seatd (logind would refuse — no active VT).
   systemd.services.hyprland-headless = {
     description = "Headless Hyprland session for wayvnc capture";
     wantedBy = [ "multi-user.target" ];
-    after    = [ "network.target" "pipewire.service" ];
+    after    = [ "network.target" "pipewire.service" "seatd.service" ];
+    requires = [ "seatd.service" ];
 
     environment = {
-      WLR_BACKENDS            = "headless";
-      WLR_LIBINPUT_NO_DEVICES = "1";
-      XDG_SESSION_TYPE        = "wayland";
-      XDG_RUNTIME_DIR         = "/run/user/${toString uid}";
-      WAYLAND_DISPLAY         = "wayland-1";
-      XDG_CURRENT_DESKTOP     = "Hyprland";
-      HOME                    = homeDir;
+      XDG_SESSION_TYPE    = "wayland";
+      XDG_RUNTIME_DIR     = "/run/user/${toString uid}";
+      WAYLAND_DISPLAY     = "wayland-1";
+      XDG_CURRENT_DESKTOP = "Hyprland";
+      HOME                = homeDir;
     };
 
     path = with pkgs; [

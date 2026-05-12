@@ -1,7 +1,8 @@
--- Headless wlroots backend: WLR_BACKENDS=headless creates no outputs by
--- default. We spawn one virtual output named HEADLESS-1 at session start,
--- then the monitor rule below configures its resolution and scale.
--- wayvnc captures whichever output is exposed via wlr-screencopy.
+-- Headless run: Hyprland 0.55+ (Aquamarine) creates a fallback output on
+-- its own when no real monitors are present, but doesn't let us name or
+-- size it. We add an explicit HEADLESS-1 at session start so the monitor
+-- rule below can pin resolution and scale; wayvnc captures it via
+-- wlr-screencopy.
 
 hl.monitor({ output = "HEADLESS-1", mode = "1920x1080@60", position = "0x0", scale = 1.0 })
 
