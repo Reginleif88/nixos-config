@@ -4,8 +4,8 @@
 
 hl.config({
   cursor = {
-    -- Headless wlroots has no hardware cursor plane; force software
-    -- cursor so it always renders into the captured framebuffer.
+    -- Force the cursor into the captured framebuffer so VNC clients always
+    -- see it, independent of the virtual display's cursor-plane behavior.
     no_hardware_cursors = true,
   },
   decoration = {
@@ -21,14 +21,12 @@ hl.config({
     enabled = false,
   },
   misc = {
-    -- Variable refresh: skip redraws when nothing changes, cutting
-    -- encoder work to ~zero on an idle session.
-    vfr = true,
     disable_hyprland_logo = true,
     disable_splash_rendering = true,
   },
   render = {
-    -- No real scanout on headless; explicit off avoids warning spam.
+    -- Remote capture benefits more from predictable compositing than direct
+    -- scanout bypasses.
     direct_scanout = false,
   },
 })

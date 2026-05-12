@@ -1,6 +1,6 @@
--- Headless VM: no real display, no GPU vendor overrides.
--- AMD Barcelo iGPU runs through generic Mesa/amdgpu drivers from
--- modules/amdgpu.nix; VAAPI used by wayvnc for H.264 encode.
+-- VM display: Proxmox exposes a VirtIO/QEMU KMS monitor, with no GPU vendor
+-- overrides. AMD Barcelo iGPU still runs through generic Mesa/amdgpu drivers
+-- from modules/amdgpu.nix; VAAPI is available to wayvnc for H.264 encode.
 
 -- Electron
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")
