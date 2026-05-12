@@ -32,6 +32,14 @@ in
     executable = true;
   };
 
+  # Codex CLI config. Install as a regular writable file because Codex
+  # persists choices like /model, /statusline, and /theme back to config.toml.
+  home.activation.install-codex-config = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    ${pkgs.coreutils}/bin/install -Dm600 \
+      ${../dotfiles/codex/config.toml} \
+      "$HOME/.codex/config.toml"
+  '';
+
   # Playwright MCP plugin: redirect user-data-dir to a writable path
   # (the default uses PLAYWRIGHT_BROWSERS_PATH which is in the read-only Nix store)
   # Written as a real file (not symlink) via activation — Claude Desktop rejects symlinks.

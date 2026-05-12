@@ -1,0 +1,43 @@
+model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+
+# Claude Code's repo config allows read/write/edit, Bash, WebFetch/WebSearch,
+# and agents. Codex expresses the same posture through sandbox and approval
+# policy rather than per-tool allowlists.
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+web_search = "live"
+allow_login_shell = true
+
+[sandbox_workspace_write]
+network_access = true
+writable_roots = [
+  "/home/reginleif88/Documents",
+  "/home/reginleif88/.codex/memories",
+  "/tmp",
+]
+
+[projects."/home/reginleif88/Documents/nixos-config"]
+trust_level = "trusted"
+
+[projects."/home/reginleif88"]
+trust_level = "trusted"
+
+[projects."/home/reginleif88/Documents/DDI_Bootcamp"]
+trust_level = "trusted"
+
+[tui]
+status_line = [
+  "model-name",
+  "current-dir",
+  "git-branch",
+  "context-used",
+  "five-hour-limit",
+  "weekly-limit",
+]
+
+[tui.model_availability_nux]
+"gpt-5.5" = 4
+
+[features]
+terminal_resize_reflow = true
