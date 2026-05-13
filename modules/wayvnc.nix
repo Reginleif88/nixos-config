@@ -64,10 +64,10 @@ in
   };
 
   # ── Seat manager (libseat → seatd, in VT-less mode) ─────────────────
-  # Hyprland needs seat-mediated access to the VM's DRM/KMS device for the
-  # Proxmox VirtIO/QEMU display. seatd is the only thing on this service-run
-  # VM desktop that can provide it (logind would too, but only for an
-  # "active" session on a real VT, which we don't have).
+  # Hyprland needs seat-mediated access to the passed-through amdgpu DRM
+  # node. seatd is the only thing on this service-run VM desktop that can
+  # provide it (logind would too, but only for an "active" session on a
+  # real VT, which we don't have).
   #
   # Default seatd creates VT-bound seats: the seat is "active" only
   # when its tty is the foreground console. With no foreground VT in a
@@ -117,10 +117,12 @@ in
   networking.firewall.allowedTCPPorts = [ 443 ];
 
   # ── Hyprland session for remote capture ─────────────────────────────
-  # Proxmox exposes a normal virtual KMS monitor named Virtual-1, so we let
-  # Hyprland use its standard DRM path instead of trying to create an
-  # Aquamarine headless output. seatd (above, in VT-less mode) provides the
-  # DRM fd; the user is added to the `seat` group to reach the socket.
+  # The Proxmox VM runs with `vga: none` and the AMD Barcelo iGPU as the
+  # only DRM device (via VFIO PCIe passthrough). `video=DP-1:1920x1080@60e`
+  # on the kernel cmdline forces amdgpu's DP-1 connector ON despite no
+  # monitor being attached, giving Hyprland a real radeonsi-backed output
+  # to render to. seatd (above, in VT-less mode) provides the DRM fd; the
+  # user is added to the `seat` group to reach the socket.
   #
   # PAMName=login is the systemd trick that gets logind to provision
   # /run/user/${uid} with the right ownership and XDG_RUNTIME_DIR,
@@ -161,11 +163,13 @@ in
   };
 
   # ── wayvnc: Wayland VNC server, localhost-only ──────────────────────
-  # Captures Virtual-1 via wlr-screencopy from the Hyprland session,
-  # encodes via VAAPI on /dev/dri/renderD128 (Barcelo iGPU, provided
-  # by modules/amdgpu.nix). WayVNC's native auth advertises RFB security
-  # types that noVNC 1.7 does not accept, so it stays localhost-only and
-  # websockify owns browser-facing HTTPS auth below.
+  # Captures DP-1 via wlr-screencopy from the Hyprland session and (with
+  # -g) encodes via the Open-H.264 RFB pseudo-encoding through neatvnc's
+  # ffmpeg backend, which uses VAAPI on the Barcelo render node. noVNC
+  # 1.7 decodes H.264 in the browser via the WebCodecs API. WayVNC's
+  # native auth advertises RFB security types that noVNC 1.7 does not
+  # accept, so it stays localhost-only and websockify owns browser-facing
+  # HTTPS auth below.
   systemd.services.wayvnc = {
     description = "wayvnc — Wayland VNC server on 127.0.0.1:5900";
     wantedBy = [ "multi-user.target" ];
@@ -192,9 +196,10 @@ in
       ExecStartPre = pkgs.writeShellScript "wayvnc-prestart" ''
         set -eu
 
-        # Wait for Hyprland's Wayland socket and Virtual-1 monitor to appear.
-        # If Hyprland crashed or the VM display vanished, fail fast instead
-        # of starting wayvnc against a missing/incorrect output.
+        # Wait for Hyprland's Wayland socket and DP-1 monitor to appear.
+        # If Hyprland crashed or the forced amdgpu connector failed to
+        # come up, fail fast instead of starting wayvnc against a missing
+        # or incorrect output.
         find_hypr_instance() {
           for dir in "$XDG_RUNTIME_DIR"/hypr/*; do
             [ -S "$dir/.socket.sock" ] || continue
@@ -205,18 +210,25 @@ in
           return 1
         }
 
-        have_virtual_monitor() {
+        have_target_monitor() {
           find_hypr_instance || return 1
-          ${hyprlandPkg}/bin/hyprctl -j monitors 2>/dev/null \
-            | ${pkgs.jq}/bin/jq -e '.[] | select(.name == "Virtual-1" and .disabled == false)' >/dev/null
+          # hyprctl may emit non-JSON ("Couldn't connect to socket", etc.)
+          # while Hyprland is still warming up; swallow it and let the
+          # caller retry instead of letting jq scream a parse error into
+          # the journal each iteration.
+          local out
+          out=$(${hyprlandPkg}/bin/hyprctl -j monitors 2>/dev/null) || return 1
+          [ -n "$out" ] || return 1
+          printf '%s' "$out" \
+            | ${pkgs.jq}/bin/jq -e '.[] | select(.name == "DP-1" and .disabled == false)' >/dev/null 2>&1
         }
 
         for i in $(seq 30); do
-          [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && have_virtual_monitor && break
+          [ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] && have_target_monitor && break
           sleep 1
         done
-        if [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] || ! have_virtual_monitor; then
-          echo "Hyprland Wayland socket or Virtual-1 monitor not ready after 30s, aborting" >&2
+        if [ ! -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ] || ! have_target_monitor; then
+          echo "Hyprland Wayland socket or DP-1 monitor not ready after 30s, aborting" >&2
           exit 1
         fi
 
@@ -229,16 +241,25 @@ in
         chmod 600 "$RUNTIME_DIRECTORY/config"
       '';
 
-      # -r: render cursor in framebuffer so it shows over VNC.
-      # -f 60: cap framerate; matches max_frame_rate from old kasmvnc.
-      # -o Virtual-1: capture the Proxmox virtual KMS display explicitly.
-      # -C: config file path with auth + bind address.
+      # -f 60: cap framerate.
+      # -o DP-1: capture the forced amdgpu DP-1 connector.
+      # -g:  enable DMA-BUF screencopy + GPU buffer path. With amdgpu as
+      #      the sole DRM device this also unlocks neatvnc's H.264
+      #      pseudo-encoding through libavcodec + VAAPI on the Barcelo
+      #      VCN block, which noVNC 1.7 decodes via WebCodecs in the
+      #      browser. Previously (-g omitted) the EPERM came from a
+      #      cross-GPU dumb-buffer fallback when virtio-gpu was the
+      #      compositor's render device and amdgpu held the encoder.
+      # -L info: surface client connect/encoder negotiation in journalctl.
+      # -C:  config file path with auth + bind address.
       #
-      # Do not pass -g here. On clematis, wayvnc's GPU path tries to allocate
-      # KMS dumb buffers on client connect and crashes after
-      # DRM_IOCTL_MODE_CREATE_DUMB returns EPERM. The software path is less
-      # fancy, but keeps the browser desktop stable.
-      ExecStart = "${pkgs.wayvnc}/bin/wayvnc -r -f 60 -o Virtual-1 -C %t/wayvnc/config";
+      # Note: -r (render cursor into framebuffer) is intentionally NOT
+      # set. The cursor goes out via the standard RFB Cursor pseudo-
+      # encoding (-239), and noVNC draws it as a CSS-positioned overlay
+      # on top of the H.264 canvas. That decouples cursor movement from
+      # the encoder frame schedule: pointer feedback runs at WebSocket
+      # RTT instead of waiting for the next P-frame.
+      ExecStart = "${pkgs.wayvnc}/bin/wayvnc -L info -f 60 -g -o DP-1 -C %t/wayvnc/config";
     };
 
   };

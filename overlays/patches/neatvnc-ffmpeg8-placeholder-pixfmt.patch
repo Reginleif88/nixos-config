@@ -1,0 +1,38 @@
+Use a non-HW placeholder pix_fmt in the H.264 buffer source filter.
+
+neatvnc 0.9.6 creates the libavfilter "buffer" source with pix_fmt=drm_prime
+and a NULL hw_frames_ctx, expecting to set the real hw_frames_ctx later via
+av_buffersrc_parameters_set(). This worked through FFmpeg 7. FFmpeg 8 enforces
+the hw_frames_ctx requirement at avfilter_graph_create_filter() itself, so
+the encoder now fails with:
+
+    Setting BufferSourceContext.pix_fmt to a HW format requires
+    hw_frames_ctx to be non-NULL!
+
+Switching the placeholder to a non-HW format (yuv420p) lets the create call
+pass; av_buffersrc_parameters_set() then overrides format -> drm_prime *and*
+attaches hw_frames_ctx in one step before avfilter_graph_config() validates.
+
+Reported upstream behaviour, kept local until neatvnc tags a fix.
+
+--- a/src/enc/h264/ffmpeg-impl.c
++++ b/src/enc/h264/ffmpeg-impl.c
+@@ -204,12 +204,15 @@ static int h264_encoder__init_buffersrc(struct h264_encoder_ffmpeg* self)
+ {
+ 	int rc;
+
+-	/* Placeholder values are used to pacify input checking and the real
+-	 * values are set below.
++	/* Placeholder values are used to pacify input checking; the real
++	 * width/height/format/hw_frames_ctx are set below via
++	 * av_buffersrc_parameters_set(). FFmpeg 8 rejects pix_fmt=drm_prime
++	 * (a HW format) without an attached hw_frames_ctx at create time,
++	 * so a non-HW placeholder is used here.
+ 	 */
+ 	rc = avfilter_graph_create_filter(&self->filter_in,
+ 			avfilter_get_by_name("buffer"), "in",
+-			"width=1:height=1:pix_fmt=drm_prime:time_base=1/1", NULL,
++			"width=1:height=1:pix_fmt=yuv420p:time_base=1/1", NULL,
+ 			self->filter_graph);
+ 	if (rc != 0)
+ 		return -1;

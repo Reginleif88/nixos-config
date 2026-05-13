@@ -1,6 +1,7 @@
--- VM display: Proxmox exposes a VirtIO/QEMU KMS monitor, with no GPU vendor
--- overrides. AMD Barcelo iGPU still runs through generic Mesa/amdgpu drivers
--- from modules/amdgpu.nix; VAAPI is available to wayvnc for H.264 encode.
+-- VM display: the AMD Barcelo iGPU is the only DRM device in the VM
+-- (Proxmox `vga: none` + PCIe passthrough). DP-1 is forced on via the
+-- video= kernel cmdline, and Hyprland renders directly through amdgpu/
+-- radeonsi. VAAPI H.264 encode is wired into wayvnc via -g.
 
 -- Electron
 hl.env("ELECTRON_OZONE_PLATFORM_HINT", "auto")

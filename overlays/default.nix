@@ -17,6 +17,22 @@ in
     '';
   });
 
+  # ── neatvnc: FFmpeg 8 compatibility ────────────────────────────────
+  # Patches the H.264 encoder's libavfilter buffer-source init to use
+  # a non-HW placeholder pix_fmt. Without this, neatvnc 0.9.6 against
+  # ffmpeg 8 logs "BufferSourceContext.pix_fmt to a HW format requires
+  # hw_frames_ctx" and falls back to Tight. Drop this override once
+  # neatvnc tags a release that handles FFmpeg 8 cleanly.
+  neatvnc = prev.neatvnc.overrideAttrs (old: {
+    patches = (old.patches or [ ]) ++ [
+      ./patches/neatvnc-ffmpeg8-placeholder-pixfmt.patch
+    ];
+  });
+
+  # wayvnc is the only consumer of neatvnc here; rebuild it against
+  # the patched library so the linked /nix/store path actually changes.
+  wayvnc = prev.wayvnc.override { neatvnc = final.neatvnc; };
+
   gtasks = prev.buildGoModule {
     pname = "gtasks";
     version = "0.13.0";

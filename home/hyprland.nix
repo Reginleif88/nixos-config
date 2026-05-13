@@ -1,4 +1,4 @@
-{ config, pkgs, hostname, ... }:
+{ config, pkgs, hostname, lib, ... }:
 
 let
   hyprlandPkg = pkgs.hyprland-patched;
@@ -25,7 +25,13 @@ in
     "hypr/input.lua".source          = ../dotfiles/hypr/input.lua;
     "hypr/binds.lua".source          = ../dotfiles/hypr/binds.lua;
     "hypr/window_rules.lua".source   = ../dotfiles/hypr/window_rules.lua;
-    "hypr/autostart.lua".source      = ../dotfiles/hypr/autostart.lua;
+    # Autostart: per-host so that clematis can omit hyprpaper / Proton Mail
+    # / claude-desktop-tray, all of which are pointless on a headless VM
+    # streamed over noVNC.
+    "hypr/autostart.lua".source      =
+      if builtins.pathExists (../dotfiles/hypr/hosts + "/${hostname}/autostart.lua")
+      then ../dotfiles/hypr/hosts + "/${hostname}/autostart.lua"
+      else ../dotfiles/hypr/autostart.lua;
     "hypr/gruvbar.lua".source        = ../dotfiles/hypr/gruvbar.lua;
     # Generated stub so the user-edited gruvbar.lua doesn't carry a /nix/store hash.
     "hypr/gruvbar_path.lua".text     = ''return "${gruvbar}/lib/libgruvbar.so"'';
@@ -36,7 +42,13 @@ in
     "hypr/workspaces.lua".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.lua;
     "hypr/settings.lua".source   = ../dotfiles/hypr/hosts/${hostname}/settings.lua;
 
-    # Hyprpaper (separate program, unaffected by the Lua migration)
+  } // lib.optionalAttrs (hostname != "clematis") {
+    # Hyprpaper (separate program, unaffected by the Lua migration).
+    # Skipped on clematis: nothing autostarts hyprpaper there, and
+    # leaving the wallpaper out drops H.264 bitrate by 20-40% during
+    # static desktop (a complex 1920x1080 background eats most of the
+    # bits in every IDR frame). Hyprland's solid-grey fallback applies
+    # automatically because settings.lua disables splash + logo.
     "hypr/hyprpaper.conf".source = ../dotfiles/hypr/hyprpaper.conf;
     "hypr/backgrounds/rainynight.png".source = ../dotfiles/hypr/backgrounds/rainynight.png;
   };
