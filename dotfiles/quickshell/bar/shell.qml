@@ -26,6 +26,7 @@ import Quickshell.Hyprland
 import Quickshell.Widgets
 import Quickshell.Services.SystemTray
 import Quickshell.Services.Pipewire
+import Quickshell.Services.UPower
 import "sidebar"
 import "network"
 import "audio"
@@ -80,8 +81,8 @@ ShellRoot {
     readonly property var fallbackWorkspaceIdsByMonitor: ({
         "DP-3": [1, 2],
         "HDMI-A-1": [3, 4],
-        "eDP-1": [1, 2, 3, 4],
-        "Virtual-1": [1, 2, 3, 4]
+        "eDP-1": [1, 2],
+        "DP-1": [1, 2]
     })
 
     function workspaceIdsForMonitor(monitor) {
@@ -101,6 +102,18 @@ ShellRoot {
         }
 
         return [1, 2, 3, 4]
+    }
+
+    // Monitor that owns workspaces 1+2 — used to anchor host-portable UI
+    // like the Gemini sidebar to the user's "primary" screen.
+    readonly property string primaryMonitorName: {
+        var monitors = Hyprland.monitors.values
+        for (var i = 0; i < monitors.length; i++) {
+            var ids = root.workspaceIdsForMonitor(monitors[i])
+            if (ids.indexOf(1) !== -1 && ids.indexOf(2) !== -1)
+                return monitors[i].name
+        }
+        return ""
     }
 
     // ---------------------
@@ -1455,10 +1468,11 @@ ShellRoot {
         }
     }
 
-    // Gemini sidebar (auto-hide, left edge of DP-3)
+    // Gemini sidebar — auto-hide on the left edge of the monitor that
+    // owns workspaces 1+2 (DP-3 on hyacinth, the only screen elsewhere).
     GeminiSidebar {
         bgColor: root.bgColor
         borderColor: root.mutedColor
-        targetScreen: "DP-3"
+        targetScreen: root.primaryMonitorName
     }
 }
