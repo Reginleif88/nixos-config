@@ -116,6 +116,10 @@ ShellRoot {
         return ""
     }
 
+    // Active tab for the network popup — lifted to root so all monitor
+    // instances share the view and the choice persists across opens.
+    property string networkActiveTab: "wifi"
+
     // ---------------------
     // Weather state (populated from weather.sh script)
     // ---------------------
@@ -997,21 +1001,56 @@ ShellRoot {
                         }
                     }
 
-                    // ---- Network pill ----
+                    // ---- Network pill (WiFi + Bluetooth side-by-side) ----
                     Pill {
+                        id: networkBtn
+                        innerSpacing: 6
+
                         Text {
-                            id: networkBtn
+                            id: wifiIcon
+                            text: networkPopup.wifiConnected !== null
+                                ? networkPopup.signalIcon(networkPopup.wifiConnected.signalStrength)
+                                : "\uDB82\uDD2F"  // wifi-strength-alert (U+F092F)
+                            font.pixelSize: root.fontSize
+                            font.family: root.fontFamily
+                            color: networkPopup.visible && root.networkActiveTab === "wifi" ? root.accentYellow
+                                 : networkPopup.wifiConnected !== null ? root.accentGreen
+                                 : networkPopup.wifiPower === "on" ? root.accentBlue
+                                 : root.mutedColor
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (networkPopup.visible && root.networkActiveTab === "wifi") {
+                                        networkPopup.visible = false
+                                    } else {
+                                        root.networkActiveTab = "wifi"
+                                        networkPopup.visible = true
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            id: btIcon
                             text: networkPopup.btPower === "on" ? "\uF294" : "\uF293"
                             font.pixelSize: root.fontSize
                             font.family: root.fontFamily
-                            color: networkPopup.visible ? root.accentYellow
+                            color: networkPopup.visible && root.networkActiveTab === "bt" ? root.accentYellow
                                  : networkPopup.btConnected.length > 0 ? root.accentGreen
                                  : networkPopup.btPower === "on" ? root.accentBlue
                                  : root.mutedColor
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: networkPopup.visible = !networkPopup.visible
+                                onClicked: {
+                                    if (networkPopup.visible && root.networkActiveTab === "bt") {
+                                        networkPopup.visible = false
+                                    } else {
+                                        root.networkActiveTab = "bt"
+                                        networkPopup.visible = true
+                                    }
+                                }
                             }
                         }
                     }
@@ -1426,6 +1465,15 @@ ShellRoot {
                 id: networkPopup
                 anchorWindow: bar
                 anchorItem: networkBtn
+
+                // Managed binding survives imperative assignments inside the
+                // popup (tab MouseAreas write popup.activeTab directly).
+                Binding {
+                    target: networkPopup
+                    property: "activeTab"
+                    value: root.networkActiveTab
+                }
+                onActiveTabChanged: root.networkActiveTab = activeTab
 
                 bgColor: root.bgColor
                 fgColor: root.fgColor

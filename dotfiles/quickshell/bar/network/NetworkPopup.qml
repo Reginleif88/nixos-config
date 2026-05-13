@@ -34,7 +34,7 @@ PopupWindow {
     required property string fontFamily
     required property int fontSize
 
-    property string activeTab: "bt"
+    property string activeTab: "wifi"
     readonly property color activeAccent: popup.accentBlue
 
     readonly property var btAdapter: Bluetooth.defaultAdapter
@@ -65,15 +65,29 @@ PopupWindow {
     readonly property var wifiNetworks: {
         if (wifiDevice === null)
             return []
-        var networks = wifiDevice.networks.values.filter(function(n) { return !n.connected })
+        var networks = wifiDevice.networks.values.filter(function(n) {
+            return !n.connected && n.name && n.name.length > 0
+        })
         networks.sort(function(a, b) { return b.signalStrength - a.signalStrength })
         return networks
     }
     readonly property string wifiSsid: wifiConnected !== null ? wifiConnected.name : ""
-    readonly property string displayBtPower: btPower
-    readonly property string displayWifiPower: wifiPower
+    readonly property bool wifiHardwareEnabled: Networking.wifiHardwareEnabled
     readonly property bool currentPowerOn:
-        activeTab === "bt" ? displayBtPower === "on" : displayWifiPower === "on"
+        activeTab === "bt" ? btPower === "on" : wifiPower === "on"
+    readonly property bool powerToggleAllowed:
+        activeTab === "bt" ? btAdapter !== null
+                           : (wifiDevice !== null && wifiHardwareEnabled)
+    property var wifiPasswordNetwork: null
+    property string wifiPasswordSsid: ""
+    property string wifiPassword: ""
+    property string wifiStatus: ""
+
+    onWifiConnectedChanged: {
+        if (popup.wifiConnected !== null && popup.wifiPasswordSsid !== "" &&
+                popup.wifiConnected.name === popup.wifiPasswordSsid)
+            popup.clearWifiPrompt()
+    }
 
     implicitWidth: popupContent.width
     implicitHeight: popupContent.height
@@ -82,14 +96,14 @@ PopupWindow {
     Binding {
         target: popup.btAdapter
         property: "discovering"
-        value: popup.visible && popup.activeTab === "bt" && popup.displayBtPower === "on"
+        value: popup.visible && popup.activeTab === "bt" && popup.btPower === "on"
         when: popup.btAdapter !== null
     }
 
     Binding {
         target: popup.wifiDevice
         property: "scannerEnabled"
-        value: popup.visible && popup.activeTab === "wifi" && popup.displayWifiPower === "on"
+        value: popup.visible && popup.activeTab === "wifi" && popup.wifiPower === "on"
         when: popup.wifiDevice !== null
     }
 
@@ -107,6 +121,32 @@ PopupWindow {
         return device ? (device.name || device.deviceName || device.address) : ""
     }
 
+    function bluetoothBusy(device) {
+        return device && (device.pairing ||
+            device.state === BluetoothDeviceState.Connecting ||
+            device.state === BluetoothDeviceState.Disconnecting)
+    }
+
+    function bluetoothActionText(device) {
+        if (!device)
+            return ""
+        if (device.pairing || device.state === BluetoothDeviceState.Connecting)
+            return "Cancel"
+        if (device.state === BluetoothDeviceState.Disconnecting)
+            return "\u2026"
+        return device.paired ? "Connect" : "Pair"
+    }
+
+    function bluetoothConnectedHint(device) {
+        if (!device)
+            return ""
+        if (device.state === BluetoothDeviceState.Disconnecting)
+            return "   Disconnecting..."
+        if (device.state === BluetoothDeviceState.Connecting)
+            return "   Connecting..."
+        return "   Hold to disconnect"
+    }
+
     function btIcon(iconName) {
         if (iconName === "audio-headphones" || iconName === "audio-headset")
             return "\uF025"
@@ -121,16 +161,93 @@ PopupWindow {
         return "\uF294"
     }
 
+    function wifiSignalPercent(signal) {
+        var value = Number(signal)
+        if (!isFinite(value))
+            return 0
+        if (value <= 1)
+            value *= 100
+        return Math.max(0, Math.min(100, value))
+    }
+
     function signalIcon(signal) {
-        if (signal >= 80) return "\uF1EB"
-        if (signal >= 60) return "\uF1EB"
-        if (signal >= 40) return "\uF1EB"
-        if (signal >= 20) return "\uF1EB"
-        return "\uF6AC"
+        var pct = popup.wifiSignalPercent(signal)
+        if (pct >= 80) return "\uDB82\uDD28"   // wifi-strength-4 (U+F0928)
+        if (pct >= 60) return "\uDB82\uDD25"   // wifi-strength-3 (U+F0925)
+        if (pct >= 40) return "\uDB82\uDD22"   // wifi-strength-2 (U+F0922)
+        if (pct >= 20) return "\uDB82\uDD1F"   // wifi-strength-1 (U+F091F)
+        return "\uDB82\uDD2F"                  // wifi-strength-alert (U+F092F)
     }
 
     function securityText(security) {
+        if (security === undefined || security === null)
+            return ""
         return WifiSecurityType.toString(security).replace(/([a-z])([A-Z])/g, "$1 $2")
+    }
+
+    function wifiUsesPassword(security) {
+        return security === WifiSecurityType.WpaPsk ||
+               security === WifiSecurityType.Wpa2Psk ||
+               security === WifiSecurityType.Sae
+    }
+
+    function clearWifiPrompt() {
+        popup.wifiPasswordNetwork = null
+        popup.wifiPasswordSsid = ""
+        popup.wifiPassword = ""
+        popup.wifiStatus = ""
+    }
+
+    function requestWifiPassword(network, status) {
+        popup.wifiPasswordNetwork = network
+        popup.wifiPasswordSsid = network ? network.name : ""
+        popup.wifiPassword = ""
+        popup.wifiStatus = status || "Password required"
+        Qt.callLater(function() {
+            if (wifiPasswordField.visible)
+                wifiPasswordField.forceActiveFocus()
+        })
+    }
+
+    function connectWifi(network) {
+        if (!network || network.stateChanging)
+            return
+        if (popup.wifiUsesPassword(network.security) && !network.known) {
+            popup.requestWifiPassword(network, "Password required")
+            return
+        }
+        popup.clearWifiPrompt()
+        network.connect()
+    }
+
+    function submitWifiPassword() {
+        if (!popup.wifiPasswordNetwork || popup.wifiPasswordNetwork.stateChanging ||
+                popup.wifiPassword.length === 0)
+            return
+        popup.wifiStatus = "Connecting..."
+        popup.wifiPasswordNetwork.connectWithPsk(popup.wifiPassword)
+    }
+
+    function handleWifiFailure(network, reason) {
+        var status = ConnectionFailReason.toString(reason)
+        if (popup.wifiUsesPassword(network.security)) {
+            popup.requestWifiPassword(network, status)
+        } else {
+            popup.wifiPasswordNetwork = null
+            popup.wifiPasswordSsid = ""
+            popup.wifiPassword = ""
+            popup.wifiStatus = status
+        }
+    }
+
+    function powerOffText() {
+        if (popup.activeTab === "bt" && popup.btAdapter === null)
+            return "No Bluetooth adapter"
+        if (popup.activeTab === "wifi" && popup.wifiDevice === null)
+            return "No WiFi adapter"
+        if (popup.activeTab === "wifi" && !popup.wifiHardwareEnabled)
+            return "WiFi hardware switch is off"
+        return popup.activeTab === "bt" ? "Bluetooth is off" : "WiFi is off"
     }
 
     Rectangle {
@@ -244,14 +361,13 @@ PopupWindow {
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: popup.powerToggleAllowed ? Qt.PointingHandCursor : Qt.ArrowCursor
                         onClicked: {
-                            if (popup.activeTab === "bt") {
-                                if (popup.btAdapter !== null)
-                                    popup.btAdapter.enabled = !popup.btAdapter.enabled
-                            } else {
+                            if (!popup.powerToggleAllowed) return
+                            if (popup.activeTab === "bt")
+                                popup.btAdapter.enabled = !popup.btAdapter.enabled
+                            else
                                 Networking.wifiEnabled = !Networking.wifiEnabled
-                            }
                         }
                     }
                 }
@@ -323,7 +439,7 @@ PopupWindow {
                             }
 
                             Text {
-                                text: "   Hold to disconnect"
+                                text: popup.bluetoothConnectedHint(modelData)
                                 font.pixelSize: popup.fontSize - 3
                                 font.family: popup.fontFamily
                                 color: popup.mutedColor
@@ -334,7 +450,10 @@ PopupWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onPressAndHold: modelData.disconnect()
+                            onPressAndHold: {
+                                if (!popup.bluetoothBusy(modelData))
+                                    modelData.disconnect()
+                            }
                         }
                     }
                 }
@@ -381,7 +500,7 @@ PopupWindow {
 
                             Text {
                                 id: actionBtn
-                                text: modelData.pairing ? "\u2026" : (modelData.paired ? "Connect" : "Pair")
+                                text: popup.bluetoothActionText(modelData)
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 font.bold: true
@@ -396,11 +515,18 @@ PopupWindow {
                             cursorShape: Qt.PointingHandCursor
                             hoverEnabled: true
                             onClicked: {
-                                if (modelData.pairing) return
+                                if (popup.bluetoothBusy(modelData)) return
                                 if (modelData.paired)
                                     modelData.connect()
                                 else
                                     modelData.pair()
+                            }
+                            onPressAndHold: {
+                                if (!popup.bluetoothBusy(modelData)) return
+                                if (typeof modelData.cancelPairing === "function")
+                                    modelData.cancelPairing()
+                                else
+                                    modelData.disconnect()
                             }
                         }
                     }
@@ -461,7 +587,7 @@ PopupWindow {
                             text: {
                                 if (!popup.wifiConnected) return ""
                                 var parts = []
-                                parts.push(Math.round(popup.wifiConnected.signalStrength) + "%")
+                                parts.push(Math.round(popup.wifiSignalPercent(popup.wifiConnected.signalStrength)) + "%")
                                 parts.push(popup.securityText(popup.wifiConnected.security))
                                 return "   " + parts.join(" \u2022 ")
                             }
@@ -471,7 +597,9 @@ PopupWindow {
                         }
 
                         Text {
-                            text: "   Hold to disconnect"
+                            text: popup.wifiConnected && popup.wifiConnected.stateChanging
+                                  ? "   Disconnecting..."
+                                  : "   Hold to disconnect"
                             font.pixelSize: popup.fontSize - 3
                             font.family: popup.fontFamily
                             color: popup.mutedColor
@@ -483,7 +611,7 @@ PopupWindow {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onPressAndHold: {
-                            if (popup.wifiConnected !== null)
+                            if (popup.wifiConnected !== null && !popup.wifiConnected.stateChanging)
                                 popup.wifiConnected.disconnect()
                         }
                     }
@@ -499,6 +627,107 @@ PopupWindow {
                     topPadding: 4
                 }
 
+                Rectangle {
+                    visible: popup.wifiPasswordNetwork !== null
+                    width: parent.width
+                    height: wifiPasswordCol.height + 12
+                    radius: 4
+                    color: Qt.rgba(popup.accentYellow.r, popup.accentYellow.g, popup.accentYellow.b, 0.1)
+                    border.color: Qt.rgba(popup.accentYellow.r, popup.accentYellow.g, popup.accentYellow.b, 0.45)
+                    border.width: 1
+
+                    Column {
+                        id: wifiPasswordCol
+                        anchors {
+                            left: parent.left; right: parent.right
+                            verticalCenter: parent.verticalCenter
+                            margins: 8
+                        }
+                        spacing: 6
+
+                        Text {
+                            text: (popup.wifiPasswordSsid !== "" ? popup.wifiPasswordSsid : "Network") +
+                                  " - " + popup.wifiStatus
+                            font.pixelSize: popup.fontSize - 2
+                            font.family: popup.fontFamily
+                            color: popup.fgColor
+                            elide: Text.ElideRight
+                            width: parent.width
+                        }
+
+                        Rectangle {
+                            width: parent.width
+                            height: 26
+                            radius: 4
+                            color: Qt.rgba(popup.fgColor.r, popup.fgColor.g, popup.fgColor.b, 0.06)
+                            border.color: popup.mutedColor
+                            border.width: 1
+
+                            TextInput {
+                                id: wifiPasswordField
+                                anchors {
+                                    left: parent.left; right: parent.right
+                                    verticalCenter: parent.verticalCenter
+                                    margins: 8
+                                }
+                                text: popup.wifiPassword
+                                echoMode: TextInput.Password
+                                font.pixelSize: popup.fontSize - 2
+                                font.family: popup.fontFamily
+                                color: popup.fgColor
+                                selectionColor: popup.accentBlue
+                                selectedTextColor: popup.bgColor
+                                clip: true
+                                onTextChanged: popup.wifiPassword = text
+                                Keys.onReturnPressed: popup.submitWifiPassword()
+                                Keys.onEscapePressed: popup.clearWifiPrompt()
+                            }
+                        }
+
+                        Row {
+                            spacing: 8
+                            anchors.right: parent.right
+
+                            Text {
+                                text: "Cancel"
+                                font.pixelSize: popup.fontSize - 2
+                                font.family: popup.fontFamily
+                                color: popup.mutedColor
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: popup.clearWifiPrompt()
+                                }
+                            }
+
+                            Text {
+                                text: popup.wifiPasswordNetwork && popup.wifiPasswordNetwork.stateChanging ? "\u2026" : "Connect"
+                                font.pixelSize: popup.fontSize - 2
+                                font.family: popup.fontFamily
+                                font.bold: true
+                                color: popup.wifiPassword.length > 0 ? popup.accentBlue : popup.mutedColor
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: popup.wifiPassword.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                    onClicked: popup.submitWifiPassword()
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    visible: popup.wifiStatus !== "" && popup.wifiPasswordNetwork === null
+                    text: popup.wifiStatus
+                    font.pixelSize: popup.fontSize - 2
+                    font.family: popup.fontFamily
+                    color: popup.accentRed
+                    elide: Text.ElideRight
+                    width: parent.width
+                }
+
                 Repeater {
                     model: popup.wifiNetworks
 
@@ -510,6 +739,21 @@ PopupWindow {
                         color: wifiDevMouse.containsMouse
                                ? Qt.rgba(popup.fgColor.r, popup.fgColor.g, popup.fgColor.b, 0.06)
                                : "transparent"
+
+                        Connections {
+                            target: modelData
+
+                            function onConnectionFailed(reason) {
+                                popup.handleWifiFailure(modelData, reason)
+                            }
+
+                            function onStateChanged() {
+                                if (modelData.state === ConnectionState.Connecting)
+                                    popup.wifiStatus = ""
+                                if (modelData.connected && popup.wifiPasswordNetwork === modelData)
+                                    popup.clearWifiPrompt()
+                            }
+                        }
 
                         Row {
                             anchors {
@@ -531,7 +775,7 @@ PopupWindow {
 
                             Text {
                                 id: wifiSigText
-                                text: Math.round(modelData.signalStrength) + "%"
+                                text: Math.round(popup.wifiSignalPercent(modelData.signalStrength)) + "%"
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 color: popup.mutedColor
@@ -554,7 +798,7 @@ PopupWindow {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             hoverEnabled: true
-                            onClicked: if (!modelData.stateChanging) modelData.connect()
+                            onClicked: popup.connectWifi(modelData)
                         }
                     }
                 }
@@ -571,7 +815,7 @@ PopupWindow {
 
             Text {
                 visible: !popup.currentPowerOn
-                text: popup.activeTab === "bt" ? "Bluetooth is off" : "WiFi is off"
+                text: popup.powerOffText()
                 font.pixelSize: popup.fontSize
                 font.family: popup.fontFamily
                 color: popup.mutedColor
