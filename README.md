@@ -10,7 +10,7 @@ Personal NixOS system configuration for a Hyprland desktop, managed with Nix Fla
 ![Home Manager](https://img.shields.io/badge/Home_Manager-5277C3?style=flat&logoColor=white)
 ![Flakes](https://img.shields.io/badge/Flakes-5277C3?style=flat&logoColor=white)
 
-Gruvbox Dark themed, multi-host (desktop + ThinkPad), NVIDIA-optimized
+Gruvbox Dark themed, multi-host (desktop, ThinkPad, and remote VM)
 
 </div>
 
@@ -56,25 +56,31 @@ nixos-config/
 ├── flake.lock
 ├── .github/
 │   └── workflows/
-│       └── flake-update.yml        # Automated flake.lock updates (every 12h)
+│       └── flake-update.yml        # Automated daily flake.lock updates
 ├── hosts/
-│   ├── desktop/
+│   ├── hyacinth/
 │   │   ├── default.nix             # Host entry point
-│   │   ├── configuration.nix       # System-level config
+│   │   ├── configuration.nix       # Desktop system config
 │   │   └── hardware-configuration.nix
-│   └── thinkpad/
+│   ├── wisteria/
+│   │   ├── default.nix             # Host entry point
+│   │   ├── configuration.nix       # ThinkPad system config
+│   │   └── hardware-configuration.nix
+│   └── clematis/
 │       ├── default.nix             # Host entry point
-│       ├── configuration.nix       # TLP, thermald, fprintd, fwupd, lid switch
+│       ├── configuration.nix       # Remote VM system config
 │       └── hardware-configuration.nix
 ├── modules/
-│   ├── core.nix                    # Base packages, locale, boot
+│   ├── core.nix                    # Base packages, fonts, Flatpak
 │   ├── hyprland.nix                # Compositor and desktop components
 │   ├── nvidia.nix                  # GPU drivers, modesetting, VRAM
 │   ├── nvidia-prime.nix            # PRIME offload, fine-grained power mgmt
+│   ├── amdgpu.nix                  # AMD GPU stack for VM passthrough
 │   ├── gaming.nix                  # Steam, Proton, GameScope
 │   ├── virtualisation.nix          # KVM, Docker, Podman
 │   ├── services.nix                # PipeWire, Bluetooth, Thunar, Flatpak
 │   ├── security.nix                # GNOME Keyring, sops-nix
+│   ├── wayvnc.nix                  # Headless Hyprland + noVNC bridge
 │   └── login.nix                   # Auto-login TTY
 ├── home/
 │   ├── default.nix                 # Home Manager entry point
@@ -93,10 +99,9 @@ nixos-config/
 │   ├── claude/                     # Claude Code settings
 │   ├── fuzzel/                     # App launcher config
 │   ├── hypr/                       # Hyprland configs (deployed via home.file)
-│   │   └── hosts/{desktop,thinkpad}/  # Per-host env, monitors, workspaces, settings
+│   │   └── hosts/{hyacinth,wisteria,clematis}/  # Per-host env, monitors, workspaces, settings
 │   ├── quickshell/bar/             # Quickshell QML bar + scripts
 │   ├── swaync/                     # Notification center config and theme
-│   ├── xfce4/                      # Thunar config
 │   └── zen-browser/                # Zen Browser user.js and policies.json
 ├── secrets/
 │   ├── .sops.yaml                  # sops-nix config
@@ -124,8 +129,8 @@ nix-shell -p git sops age
 git clone https://github.com/Reginleif88/nixos-config.git ~/Documents/nixos-config
 cd ~/Documents/nixos-config
 
-./scripts/target-setup.sh          # decrypts age key and sets up secrets
-sudo nixos-rebuild switch --flake .#desktop   # or .#thinkpad
+./scripts/target-setup.sh hyacinth # or wisteria / clematis
+sudo nixos-rebuild switch --flake .#hyacinth  # or .#wisteria / .#clematis
 ```
 
 The `target-setup.sh` script handles:

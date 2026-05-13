@@ -237,26 +237,36 @@ is_cache_fresh() {
 # ── Ensure fresh data ─────────────────────────────────────────────
 ensure_data() {
     if ! is_cache_fresh; then
-        fetch_forecast
+        fetch_forecast || return 1
     fi
 }
 
 # ── CLI interface ──────────────────────────────────────────────────
 case "${1:---bar}" in
     --bar)
-        ensure_data
+        refresh_ok=1
+        ensure_data || refresh_ok=0
         if [[ -f "$FORECAST_CACHE" ]]; then
-            jq -c '.current + {ready: .ready}' "$FORECAST_CACHE"
+            if [[ $refresh_ok -eq 1 ]]; then
+                jq -c '.current + {ready: .ready}' "$FORECAST_CACHE"
+            else
+                jq -c '.current + {ready: true, stale: true, error: "refresh failed"}' "$FORECAST_CACHE"
+            fi
         else
-            echo '{"ready":false}'
+            echo '{"ready":false,"error":"refresh failed"}'
         fi
         ;;
     --json)
-        ensure_data
+        refresh_ok=1
+        ensure_data || refresh_ok=0
         if [[ -f "$FORECAST_CACHE" ]]; then
-            cat "$FORECAST_CACHE"
+            if [[ $refresh_ok -eq 1 ]]; then
+                cat "$FORECAST_CACHE"
+            else
+                jq -c '. + {ready: true, stale: true, error: "refresh failed"}' "$FORECAST_CACHE"
+            fi
         else
-            echo '{"ready":false,"forecast":[]}'
+            echo '{"ready":false,"forecast":[],"error":"refresh failed"}'
         fi
         ;;
     --update)

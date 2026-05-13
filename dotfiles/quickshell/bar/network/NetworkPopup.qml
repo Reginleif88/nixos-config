@@ -2,17 +2,17 @@ import QtQuick
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
-import Quickshell.Io
+import Quickshell.Networking
+import Quickshell.Bluetooth
 
-// Network management popup with WiFi + Bluetooth tabs
-// Clean list-based UI matching existing bar popup style (sinkPopup, volPopup)
+// Network management popup with WiFi + Bluetooth tabs.
+// State comes from Quickshell's native NetworkManager and BlueZ bindings.
 
 PopupWindow {
     id: popup
     visible: false
     grabFocus: true
 
-    // These must be set by the parent (shell.qml)
     required property var anchorWindow
     required property var anchorItem
 
@@ -22,7 +22,6 @@ PopupWindow {
     anchor.gravity: Edges.Bottom
     anchor.adjustment: PopupAdjustment.Slide
 
-    // Theme colors (passed from root)
     required property color bgColor
     required property color fgColor
     required property color mutedColor
@@ -35,197 +34,105 @@ PopupWindow {
     required property string fontFamily
     required property int fontSize
 
-    // Expose state to parent for bar icon coloring
-    property string btPower: "off"
-    property string btConnName: ""
-    property string wifiPower: "off"
-    property string wifiSsid: ""
+    property string activeTab: "bt"
+    readonly property color activeAccent: popup.accentBlue
+
+    readonly property var btAdapter: Bluetooth.defaultAdapter
+    readonly property var wifiDevice: {
+        var devices = Networking.devices.values
+        for (var i = 0; i < devices.length; i++) {
+            if (devices[i].type === DeviceType.Wifi)
+                return devices[i]
+        }
+        return null
+    }
+
+    readonly property string btPower: btAdapter !== null && btAdapter.enabled ? "on" : "off"
+    readonly property string wifiPower: Networking.wifiEnabled ? "on" : "off"
+    readonly property var btConnected: sortedDevices(function(d) { return d.connected })
+    readonly property var btDevices: sortedDevices(function(d) { return !d.connected })
+    readonly property string btConnName: btConnected.length > 0 ? deviceDisplayName(btConnected[0]) : ""
+    readonly property var wifiConnected: {
+        if (wifiDevice === null)
+            return null
+        var networks = wifiDevice.networks.values
+        for (var i = 0; i < networks.length; i++) {
+            if (networks[i].connected)
+                return networks[i]
+        }
+        return null
+    }
+    readonly property var wifiNetworks: {
+        if (wifiDevice === null)
+            return []
+        var networks = wifiDevice.networks.values.filter(function(n) { return !n.connected })
+        networks.sort(function(a, b) { return b.signalStrength - a.signalStrength })
+        return networks
+    }
+    readonly property string wifiSsid: wifiConnected !== null ? wifiConnected.name : ""
+    readonly property string displayBtPower: btPower
+    readonly property string displayWifiPower: wifiPower
+    readonly property bool currentPowerOn:
+        activeTab === "bt" ? displayBtPower === "on" : displayWifiPower === "on"
 
     implicitWidth: popupContent.width
     implicitHeight: popupContent.height
     color: popup.bgColor
 
-    // ─────────────────────────────────────────────────────
-    // Internal state
-    // ─────────────────────────────────────────────────────
-    property string activeTab: "bt"      // "bt" or "wifi"
-    readonly property color activeAccent: popup.accentBlue
-
-    // Bluetooth state
-    property var btConnected: []
-    property var btDevices: []
-    property string _btBuf: ""
-
-    // WiFi state
-    property var wifiConnected: null
-    property var wifiNetworks: []
-    property string _wifiBuf: ""
-
-    // Optimistic power toggle state
-    property bool btPowerPending: false
-    property string expectedBtPower: ""
-    property bool wifiPowerPending: false
-    property string expectedWifiPower: ""
-
-    // Per-device busy tracking (MAC/SSID → true)
-    property var busyTasks: ({})
-
-    readonly property string scriptsDir:
-        Qt.resolvedUrl("../scripts/").toString().replace("file://", "")
-
-    // ─────────────────────────────────────────────────────
-    // BT status polling
-    // ─────────────────────────────────────────────────────
-    Process {
-        id: btStatusProc
-        command: ["bash", popup.scriptsDir + "bluetooth_panel.sh", "--status"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._btBuf += line }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(popup._btBuf)
-                if (!popup.btPowerPending) {
-                    popup.btPower = d.power || "off"
-                }
-                popup.btConnected = d.connected || []
-                popup.btDevices = d.devices || []
-                popup.btConnName = popup.btConnected.length > 0
-                    ? popup.btConnected[0].name : ""
-            } catch(e) {}
-            popup._btBuf = ""
-        }
+    Binding {
+        target: popup.btAdapter
+        property: "discovering"
+        value: popup.visible && popup.activeTab === "bt" && popup.displayBtPower === "on"
+        when: popup.btAdapter !== null
     }
 
-    // ─────────────────────────────────────────────────────
-    // WiFi status polling
-    // ─────────────────────────────────────────────────────
-    Process {
-        id: wifiStatusProc
-        command: ["bash", popup.scriptsDir + "wifi_panel.sh", "--status"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._wifiBuf += line }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(popup._wifiBuf)
-                if (!popup.wifiPowerPending) {
-                    popup.wifiPower = d.power || "off"
-                }
-                popup.wifiConnected = d.connected || null
-                popup.wifiNetworks = d.networks || []
-                popup.wifiSsid = popup.wifiConnected
-                    ? popup.wifiConnected.ssid : ""
-            } catch(e) {}
-            popup._wifiBuf = ""
-        }
+    Binding {
+        target: popup.wifiDevice
+        property: "scannerEnabled"
+        value: popup.visible && popup.activeTab === "wifi" && popup.displayWifiPower === "on"
+        when: popup.wifiDevice !== null
     }
 
-    // Fast poll when popup is open, slow background poll for bar icon state
-    Timer {
-        id: pollTimer
-        interval: popup.visible ? 3000 : 15000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            btStatusProc.running = true
-            if (popup.visible)
-                wifiStatusProc.running = true
-        }
+    function sortedDevices(predicate) {
+        if (popup.btAdapter === null)
+            return []
+        var devices = popup.btAdapter.devices.values.filter(predicate)
+        devices.sort(function(a, b) {
+            return popup.deviceDisplayName(a).localeCompare(popup.deviceDisplayName(b))
+        })
+        return devices
     }
 
-    // ─────────────────────────────────────────────────────
-    // Action processes (fire-and-forget, re-poll on exit)
-    // ─────────────────────────────────────────────────────
-    Process {
-        id: btToggleProc
-        command: ["bash", popup.scriptsDir + "bluetooth_panel.sh", "--toggle"]
-        onExited: function() { btStatusProc.running = true }
+    function deviceDisplayName(device) {
+        return device ? (device.name || device.deviceName || device.address) : ""
     }
 
-    Process {
-        id: wifiToggleProc
-        command: ["bash", popup.scriptsDir + "wifi_panel.sh", "--toggle"]
-        onExited: function() { wifiStatusProc.running = true }
+    function btIcon(iconName) {
+        if (iconName === "audio-headphones" || iconName === "audio-headset")
+            return "\uF025"
+        if (iconName === "input-mouse")
+            return "\uF8CC"
+        if (iconName === "input-keyboard")
+            return "\uF11C"
+        if (iconName === "phone")
+            return "\uF10B"
+        if (iconName === "computer")
+            return "\uF109"
+        return "\uF294"
     }
 
-    // BT connect/disconnect — command set dynamically
-    Process {
-        id: btActionProc
-        property string targetMac: ""
-        command: ["bash", popup.scriptsDir + "bluetooth_panel.sh", "--connect", targetMac]
-        onExited: function() {
-            var newBusy = Object.assign({}, popup.busyTasks)
-            delete newBusy[targetMac]
-            popup.busyTasks = newBusy
-            btStatusProc.running = true
-        }
+    function signalIcon(signal) {
+        if (signal >= 80) return "\uF1EB"
+        if (signal >= 60) return "\uF1EB"
+        if (signal >= 40) return "\uF1EB"
+        if (signal >= 20) return "\uF1EB"
+        return "\uF6AC"
     }
 
-    Process {
-        id: btDisconnectProc
-        property string targetMac: ""
-        command: ["bash", popup.scriptsDir + "bluetooth_panel.sh", "--disconnect", targetMac]
-        onExited: function() {
-            var newBusy = Object.assign({}, popup.busyTasks)
-            delete newBusy[targetMac]
-            popup.busyTasks = newBusy
-            btStatusProc.running = true
-        }
+    function securityText(security) {
+        return WifiSecurityType.toString(security).replace(/([a-z])([A-Z])/g, "$1 $2")
     }
 
-    Process {
-        id: wifiConnectProc
-        property string targetSsid: ""
-        command: ["bash", popup.scriptsDir + "wifi_panel.sh", "--connect", targetSsid]
-        onExited: function() {
-            var newBusy = Object.assign({}, popup.busyTasks)
-            delete newBusy[targetSsid]
-            popup.busyTasks = newBusy
-            wifiStatusProc.running = true
-        }
-    }
-
-    Process {
-        id: wifiDisconnectProc
-        command: ["bash", popup.scriptsDir + "wifi_panel.sh", "--disconnect"]
-        onExited: function() { wifiStatusProc.running = true }
-    }
-
-    // Power toggle timeout resets
-    Timer {
-        id: btPendingReset
-        interval: 8000
-        onTriggered: { popup.btPowerPending = false; popup.expectedBtPower = "" }
-    }
-    Timer {
-        id: wifiPendingReset
-        interval: 8000
-        onTriggered: { popup.wifiPowerPending = false; popup.expectedWifiPower = "" }
-    }
-
-    // Busy timeout (safety valve — 15s)
-    Timer {
-        id: busyTimeout
-        interval: 15000
-        running: Object.keys(popup.busyTasks).length > 0
-        onTriggered: { popup.busyTasks = ({}) }
-    }
-
-    // ─────────────────────────────────────────────────────
-    // Helper: current power state (respects optimistic UI)
-    // ─────────────────────────────────────────────────────
-    readonly property string displayBtPower:
-        btPowerPending ? expectedBtPower : btPower
-    readonly property string displayWifiPower:
-        wifiPowerPending ? expectedWifiPower : wifiPower
-    readonly property bool currentPowerOn:
-        activeTab === "bt" ? displayBtPower === "on" : displayWifiPower === "on"
-
-    // ─────────────────────────────────────────────────────
-    // UI
-    // ─────────────────────────────────────────────────────
     Rectangle {
         id: popupContent
         width: 300
@@ -245,7 +152,6 @@ PopupWindow {
             }
             spacing: 8
 
-            // ── Tab buttons ──────────────────────────────
             Row {
                 spacing: 4
                 width: parent.width
@@ -260,7 +166,7 @@ PopupWindow {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "󰤨  WiFi"
+                        text: "\uF1EB  WiFi"
                         font.pixelSize: popup.fontSize
                         font.family: popup.fontFamily
                         font.bold: popup.activeTab === "wifi"
@@ -299,14 +205,12 @@ PopupWindow {
                 }
             }
 
-            // ── Divider ─────────────────────────────────
             Rectangle {
                 width: parent.width; height: 1
                 color: popup.mutedColor
             }
 
-            // ── Power toggle ────────────────────────────
-            Row {
+            RowLayout {
                 width: parent.width
                 spacing: 8
 
@@ -315,15 +219,15 @@ PopupWindow {
                     font.pixelSize: popup.fontSize
                     font.family: popup.fontFamily
                     color: popup.fgColor
-                    anchors.verticalCenter: parent.verticalCenter
+                    Layout.alignment: Qt.AlignVCenter
                 }
 
-                Item { width: 1; height: 1; Layout.fillWidth: true }
+                Item { Layout.fillWidth: true; height: 1 }
 
                 Rectangle {
                     width: 44; height: 22
                     radius: 11
-                    anchors.verticalCenter: parent.verticalCenter
+                    Layout.alignment: Qt.AlignVCenter
                     color: popup.currentPowerOn
                            ? Qt.rgba(popup.activeAccent.r, popup.activeAccent.g, popup.activeAccent.b, 0.3)
                            : popup.mutedColor
@@ -343,15 +247,10 @@ PopupWindow {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (popup.activeTab === "bt") {
-                                popup.btPowerPending = true
-                                popup.expectedBtPower = popup.btPower === "on" ? "off" : "on"
-                                btPendingReset.restart()
-                                btToggleProc.running = true
+                                if (popup.btAdapter !== null)
+                                    popup.btAdapter.enabled = !popup.btAdapter.enabled
                             } else {
-                                popup.wifiPowerPending = true
-                                popup.expectedWifiPower = popup.wifiPower === "on" ? "off" : "on"
-                                wifiPendingReset.restart()
-                                wifiToggleProc.running = true
+                                Networking.wifiEnabled = !Networking.wifiEnabled
                             }
                         }
                     }
@@ -362,26 +261,21 @@ PopupWindow {
                     font.pixelSize: popup.fontSize - 2
                     font.family: popup.fontFamily
                     color: popup.currentPowerOn ? popup.activeAccent : popup.mutedColor
-                    anchors.verticalCenter: parent.verticalCenter
+                    Layout.alignment: Qt.AlignVCenter
                 }
             }
 
-            // ── Divider ─────────────────────────────────
             Rectangle {
                 width: parent.width; height: 1
                 color: popup.mutedColor
                 visible: popup.currentPowerOn
             }
 
-            // ═══════════════════════════════════════════════
-            // BLUETOOTH TAB CONTENT
-            // ═══════════════════════════════════════════════
             Column {
                 visible: popup.activeTab === "bt" && popup.currentPowerOn
                 width: parent.width
                 spacing: 6
 
-                // ── Connected devices ────────────────────
                 Text {
                     visible: popup.btConnected.length > 0
                     text: "CONNECTED"
@@ -396,7 +290,6 @@ PopupWindow {
 
                     delegate: Rectangle {
                         required property var modelData
-                        required property int index
                         width: parent.width
                         height: btConnCol.height + 12
                         radius: 4
@@ -412,7 +305,7 @@ PopupWindow {
                             spacing: 2
 
                             Text {
-                                text: modelData.icon + "  " + modelData.name
+                                text: popup.btIcon(modelData.icon) + "  " + popup.deviceDisplayName(modelData)
                                 font.pixelSize: popup.fontSize
                                 font.family: popup.fontFamily
                                 font.bold: true
@@ -422,27 +315,15 @@ PopupWindow {
                             }
 
                             Text {
-                                visible: modelData.battery !== "" || modelData.profile !== ""
-                                text: {
-                                    var parts = []
-                                    if (modelData.battery !== "")
-                                        parts.push(modelData.battery + "%")
-                                    if (modelData.profile !== "")
-                                        parts.push(modelData.profile)
-                                    return "   " + parts.join(" \u2022 ")
-                                }
+                                visible: modelData.batteryAvailable
+                                text: "   " + Math.round(modelData.battery * 100) + "%"
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 color: popup.fgColor
                             }
 
                             Text {
-                                text: {
-                                    var mac = modelData.mac
-                                    if (popup.busyTasks[mac])
-                                        return "   Disconnecting\u2026"
-                                    return "   Hold to disconnect"
-                                }
+                                text: "   Hold to disconnect"
                                 font.pixelSize: popup.fontSize - 3
                                 font.family: popup.fontFamily
                                 color: popup.mutedColor
@@ -453,20 +334,11 @@ PopupWindow {
                         MouseArea {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
-                            onPressAndHold: {
-                                var mac = modelData.mac
-                                if (popup.busyTasks[mac]) return
-                                var newBusy = Object.assign({}, popup.busyTasks)
-                                newBusy[mac] = true
-                                popup.busyTasks = newBusy
-                                btDisconnectProc.targetMac = mac
-                                btDisconnectProc.running = true
-                            }
+                            onPressAndHold: modelData.disconnect()
                         }
                     }
                 }
 
-                // ── Available devices ────────────────────
                 Text {
                     visible: popup.btDevices.length > 0
                     text: "AVAILABLE DEVICES"
@@ -482,7 +354,6 @@ PopupWindow {
 
                     delegate: Rectangle {
                         required property var modelData
-                        required property int index
                         width: parent.width
                         height: 32
                         radius: 4
@@ -499,7 +370,7 @@ PopupWindow {
                             spacing: 8
 
                             Text {
-                                text: modelData.icon + "  " + modelData.name
+                                text: popup.btIcon(modelData.icon) + "  " + popup.deviceDisplayName(modelData)
                                 font.pixelSize: popup.fontSize
                                 font.family: popup.fontFamily
                                 color: popup.fgColor
@@ -510,11 +381,7 @@ PopupWindow {
 
                             Text {
                                 id: actionBtn
-                                text: {
-                                    var mac = modelData.mac
-                                    if (popup.busyTasks[mac]) return "\u2026"
-                                    return modelData.action
-                                }
+                                text: modelData.pairing ? "\u2026" : (modelData.paired ? "Connect" : "Pair")
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 font.bold: true
@@ -529,22 +396,19 @@ PopupWindow {
                             cursorShape: Qt.PointingHandCursor
                             hoverEnabled: true
                             onClicked: {
-                                var mac = modelData.mac
-                                if (popup.busyTasks[mac]) return
-                                var newBusy = Object.assign({}, popup.busyTasks)
-                                newBusy[mac] = true
-                                popup.busyTasks = newBusy
-                                btActionProc.targetMac = mac
-                                btActionProc.running = true
+                                if (modelData.pairing) return
+                                if (modelData.paired)
+                                    modelData.connect()
+                                else
+                                    modelData.pair()
                             }
                         }
                     }
                 }
 
-                // Empty state
                 Text {
                     visible: popup.btConnected.length === 0 && popup.btDevices.length === 0
-                    text: "No devices found"
+                    text: popup.btAdapter === null ? "No Bluetooth adapter" : "No devices found"
                     font.pixelSize: popup.fontSize
                     font.family: popup.fontFamily
                     color: popup.mutedColor
@@ -552,15 +416,11 @@ PopupWindow {
                 }
             }
 
-            // ═══════════════════════════════════════════════
-            // WIFI TAB CONTENT
-            // ═══════════════════════════════════════════════
             Column {
                 visible: popup.activeTab === "wifi" && popup.currentPowerOn
                 width: parent.width
                 spacing: 6
 
-                // ── Connected network ────────────────────
                 Text {
                     visible: popup.wifiConnected !== null
                     text: "CONNECTED"
@@ -587,8 +447,8 @@ PopupWindow {
                         spacing: 2
 
                         Text {
-                            text: (popup.wifiConnected ? popup.wifiConnected.icon : "") + "  " +
-                                  (popup.wifiConnected ? popup.wifiConnected.ssid : "")
+                            text: (popup.wifiConnected ? popup.signalIcon(popup.wifiConnected.signalStrength) : "") + "  " +
+                                  (popup.wifiConnected ? popup.wifiConnected.name : "")
                             font.pixelSize: popup.fontSize
                             font.family: popup.fontFamily
                             font.bold: true
@@ -601,33 +461,13 @@ PopupWindow {
                             text: {
                                 if (!popup.wifiConnected) return ""
                                 var parts = []
-                                if (popup.wifiConnected.signal)
-                                    parts.push(popup.wifiConnected.signal + "%")
-                                if (popup.wifiConnected.security)
-                                    parts.push(popup.wifiConnected.security)
+                                parts.push(Math.round(popup.wifiConnected.signalStrength) + "%")
+                                parts.push(popup.securityText(popup.wifiConnected.security))
                                 return "   " + parts.join(" \u2022 ")
                             }
                             font.pixelSize: popup.fontSize - 2
                             font.family: popup.fontFamily
                             color: popup.fgColor
-                        }
-
-                        Text {
-                            visible: popup.wifiConnected !== null &&
-                                     ((popup.wifiConnected ? popup.wifiConnected.ip : "") !== "" ||
-                                      (popup.wifiConnected ? popup.wifiConnected.freq : "") !== "")
-                            text: {
-                                if (!popup.wifiConnected) return ""
-                                var parts = []
-                                if (popup.wifiConnected.ip)
-                                    parts.push(popup.wifiConnected.ip)
-                                if (popup.wifiConnected.freq)
-                                    parts.push(popup.wifiConnected.freq)
-                                return "   " + parts.join(" \u2022 ")
-                            }
-                            font.pixelSize: popup.fontSize - 3
-                            font.family: popup.fontFamily
-                            color: popup.mutedColor
                         }
 
                         Text {
@@ -643,12 +483,12 @@ PopupWindow {
                         anchors.fill: parent
                         cursorShape: Qt.PointingHandCursor
                         onPressAndHold: {
-                            wifiDisconnectProc.running = true
+                            if (popup.wifiConnected !== null)
+                                popup.wifiConnected.disconnect()
                         }
                     }
                 }
 
-                // ── Available networks ───────────────────
                 Text {
                     visible: popup.wifiNetworks.length > 0
                     text: "AVAILABLE NETWORKS"
@@ -664,7 +504,6 @@ PopupWindow {
 
                     delegate: Rectangle {
                         required property var modelData
-                        required property int index
                         width: parent.width
                         height: 32
                         radius: 4
@@ -681,7 +520,7 @@ PopupWindow {
                             spacing: 8
 
                             Text {
-                                text: modelData.icon + "  " + modelData.ssid
+                                text: popup.signalIcon(modelData.signalStrength) + "  " + modelData.name
                                 font.pixelSize: popup.fontSize
                                 font.family: popup.fontFamily
                                 color: popup.fgColor
@@ -692,7 +531,7 @@ PopupWindow {
 
                             Text {
                                 id: wifiSigText
-                                text: modelData.signal + "%"
+                                text: Math.round(modelData.signalStrength) + "%"
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 color: popup.mutedColor
@@ -701,11 +540,7 @@ PopupWindow {
 
                             Text {
                                 id: wifiActionBtn
-                                text: {
-                                    var ssid = modelData.ssid
-                                    if (popup.busyTasks[ssid]) return "\u2026"
-                                    return "Connect"
-                                }
+                                text: modelData.stateChanging ? "\u2026" : "Connect"
                                 font.pixelSize: popup.fontSize - 2
                                 font.family: popup.fontFamily
                                 font.bold: true
@@ -719,23 +554,14 @@ PopupWindow {
                             anchors.fill: parent
                             cursorShape: Qt.PointingHandCursor
                             hoverEnabled: true
-                            onClicked: {
-                                var ssid = modelData.ssid
-                                if (popup.busyTasks[ssid]) return
-                                var newBusy = Object.assign({}, popup.busyTasks)
-                                newBusy[ssid] = true
-                                popup.busyTasks = newBusy
-                                wifiConnectProc.targetSsid = ssid
-                                wifiConnectProc.running = true
-                            }
+                            onClicked: if (!modelData.stateChanging) modelData.connect()
                         }
                     }
                 }
 
-                // Empty state
                 Text {
                     visible: popup.wifiConnected === null && popup.wifiNetworks.length === 0
-                    text: "No networks found"
+                    text: popup.wifiDevice === null ? "No WiFi adapter" : "No networks found"
                     font.pixelSize: popup.fontSize
                     font.family: popup.fontFamily
                     color: popup.mutedColor
@@ -743,7 +569,6 @@ PopupWindow {
                 }
             }
 
-            // ── Power off message ────────────────────────
             Text {
                 visible: !popup.currentPowerOn
                 text: popup.activeTab === "bt" ? "Bluetooth is off" : "WiFi is off"

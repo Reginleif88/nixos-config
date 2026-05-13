@@ -33,22 +33,6 @@
         "type": "github"
       }
     },
-    "ascii-vault": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1774535705,
-        "narHash": "sha256-UOMX78kML+D5MQQyRFN0+OnYIb26TYLA/Z2yJ7xBvlg=",
-        "owner": "lorediggia",
-        "repo": "ascii-vault",
-        "rev": "186136a3b3b084b733a8a2a25442f3217a94f3fa",
-        "type": "github"
-      },
-      "original": {
-        "owner": "lorediggia",
-        "repo": "ascii-vault",
-        "type": "github"
-      }
-    },
     "cachyos-kernel": {
       "flake": false,
       "locked": {
@@ -110,11 +94,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1778594011,
-        "narHash": "sha256-uxNDx2V6xWaegDrU900PQYODMxmqFxBcQ7k95Fr/k7w=",
+        "lastModified": 1778663602,
+        "narHash": "sha256-hhTi82Fa2P+q4j88iphZUapTPN7t4GZ+cBbUXnkF2kM=",
         "owner": "Reginleif88",
         "repo": "claude-cowork-nix",
-        "rev": "a4c5b8fe743d68c31fa35f95ae39c4f974a5552d",
+        "rev": "babeef88a959553788a64f2387d4ea4851f3341c",
         "type": "github"
       },
       "original": {
@@ -416,36 +400,6 @@
       "original": {
         "owner": "hyprwm",
         "repo": "hyprland-guiutils",
-        "type": "github"
-      }
-    },
-    "hyprland-plugins": {
-      "inputs": {
-        "hyprland": [
-          "hyprland"
-        ],
-        "nixpkgs": [
-          "hyprland-plugins",
-          "hyprland",
-          "nixpkgs"
-        ],
-        "systems": [
-          "hyprland-plugins",
-          "hyprland",
-          "systems"
-        ]
-      },
-      "locked": {
-        "lastModified": 1778609347,
-        "narHash": "sha256-VTRC7MN4HReathEqTEAGtTb6X6fjFXLhK4/+jZHTl1Q=",
-        "owner": "hyprwm",
-        "repo": "hyprland-plugins",
-        "rev": "3aa21f2e0ca72412f1b434c3126f8f1fec3c716c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "hyprwm",
-        "repo": "hyprland-plugins",
         "type": "github"
       }
     },
@@ -862,14 +816,12 @@
     },
     "root": {
       "inputs": {
-        "ascii-vault": "ascii-vault",
         "claude-code": "claude-code",
         "claude-desktop": "claude-desktop",
         "dwproton": "dwproton",
         "home-manager": "home-manager",
         "huion-note-x10-ble": "huion-note-x10-ble",
         "hyprland": "hyprland",
-        "hyprland-plugins": "hyprland-plugins",
         "nix-cachyos-kernel": "nix-cachyos-kernel",
         "nix-flatpak": "nix-flatpak",
         "nix-vscode-extensions": "nix-vscode-extensions",

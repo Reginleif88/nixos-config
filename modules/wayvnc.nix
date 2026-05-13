@@ -1,4 +1,4 @@
-{ config, pkgs, lib, inputs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   user      = "reginleif88";
@@ -20,18 +20,7 @@ let
   certGroup = "wayvnc-cert";
   certDir   = config.security.acme.certs.${hostname}.directory;
 
-  # ── Hyprland package ────────────────────────────────────────────────
-  # Identical override to home/hyprland.nix:18-23. Patches a SIGSEGV
-  # in upstream commit ee58a513 (device-tags null deref). If the
-  # upstream PR #13728 merges and you drop the patch in home/, drop
-  # it here too — both copies must update together or the headless
-  # session will run a different binary than the interactive one.
-  hyprlandPkg = (inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland).overrideAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      substituteInPlace src/managers/input/InputManager.cpp \
-        --replace-fail 'CVarList2(Config::mgr()->getDeviceString(devname, "tags"))' 'CVarList2(std::string(""))'
-    '';
-  });
+  hyprlandPkg = pkgs.hyprland-patched;
 
   websockifyAuthPlugin = pkgs.writeTextDir "websockify_file_auth.py" ''
     from websockify.auth_plugins import BasicHTTPAuth

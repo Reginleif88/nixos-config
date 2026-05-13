@@ -3,9 +3,10 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
+import Quickshell.Services.Mpris
 
 // MPRIS media player popup for Quickshell bar
-// Shows current track info and playback controls via playerctl
+// Shows current track info and playback controls via Quickshell's native MPRIS service.
 
 PopupWindow {
     id: popup
@@ -21,7 +22,6 @@ PopupWindow {
     anchor.gravity: Edges.Bottom
     anchor.adjustment: PopupAdjustment.Slide
 
-    // Theme colors (passed from root)
     required property color bgColor
     required property color fgColor
     required property color mutedColor
@@ -31,123 +31,39 @@ PopupWindow {
     required property string fontFamily
     required property int fontSize
 
-    // Expose state to parent for bar pill
-    property bool playerAvailable: false
-    property string playerStatus: "Stopped"
-    property string playerName: ""
-    property string trackTitle: ""
-    property string trackArtist: ""
-    property string trackAlbum: ""
-    property int trackPosition: 0
-    property int trackLength: 0
-
     implicitWidth: popupContent.width
     implicitHeight: popupContent.height
     color: popup.bgColor
 
-    // ─────────────────────────────────────────────────────
-    // Internal state
-    // ─────────────────────────────────────────────────────
-    property string _buf: ""
+    readonly property var activePlayer: {
+        var players = Mpris.players.values
+        if (players.length === 0)
+            return null
+        for (var i = 0; i < players.length; i++) {
+            if (players[i].isPlaying)
+                return players[i]
+        }
+        return players[0]
+    }
+
+    readonly property bool playerAvailable: activePlayer !== null
+    readonly property string playerStatus: !activePlayer
+        ? "Stopped"
+        : MprisPlaybackState.toString(activePlayer.playbackState)
+    readonly property string playerName: activePlayer?.identity || activePlayer?.desktopEntry || ""
+    readonly property string trackTitle: activePlayer?.trackTitle ?? ""
+    readonly property string trackArtist: activePlayer?.trackArtist ?? ""
+    readonly property string trackAlbum: activePlayer?.trackAlbum ?? ""
+    readonly property int trackPosition: Math.max(0, Math.floor(activePlayer?.position ?? 0))
+    readonly property int trackLength: Math.max(0, Math.floor(activePlayer?.length ?? 0))
 
     readonly property string scriptsDir:
         Qt.resolvedUrl("../scripts/").toString().replace("file://", "")
-
-    function _parseStatus(buf) {
-        try {
-            var d = JSON.parse(buf)
-            popup.playerAvailable = d.available || false
-            popup.playerStatus = d.status || "Stopped"
-            popup.playerName = d.player || ""
-            popup.trackTitle = d.title || ""
-            popup.trackArtist = d.artist || ""
-            popup.trackAlbum = d.album || ""
-            popup.trackPosition = d.position || 0
-            popup.trackLength = d.length || 0
-        } catch(e) {}
-    }
 
     function formatTime(secs) {
         var m = Math.floor(secs / 60)
         var s = secs % 60
         return m + ":" + (s < 10 ? "0" : "") + s
-    }
-
-    // ─────────────────────────────────────────────────────
-    // Status polling
-    // ─────────────────────────────────────────────────────
-    Process {
-        id: statusProc
-        command: ["bash", popup.scriptsDir + "music_panel.sh", "--status"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._buf += line + "\n" }
-        }
-        onExited: function() {
-            popup._parseStatus(popup._buf)
-            popup._buf = ""
-        }
-    }
-
-    // Background poll (pill updates when popup closed)
-    Timer {
-        interval: 5000
-        running: !popup.visible
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: if (!statusProc.running) statusProc.running = true
-    }
-
-    // Foreground poll (faster updates when popup open)
-    Timer {
-        interval: 2000
-        running: popup.visible
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: if (!statusProc.running) statusProc.running = true
-    }
-
-    // ─────────────────────────────────────────────────────
-    // Action processes (each has its own buffer to prevent
-    // interleaving if two actions fire concurrently)
-    // ─────────────────────────────────────────────────────
-    property string _playPauseBuf: ""
-    property string _nextBuf: ""
-    property string _prevBuf: ""
-
-    Process {
-        id: playPauseProc
-        command: ["bash", popup.scriptsDir + "music_panel.sh", "--play-pause"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._playPauseBuf += line + "\n" }
-        }
-        onExited: function() {
-            popup._parseStatus(popup._playPauseBuf)
-            popup._playPauseBuf = ""
-        }
-    }
-
-    Process {
-        id: nextProc
-        command: ["bash", popup.scriptsDir + "music_panel.sh", "--next"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._nextBuf += line + "\n" }
-        }
-        onExited: function() {
-            popup._parseStatus(popup._nextBuf)
-            popup._nextBuf = ""
-        }
-    }
-
-    Process {
-        id: prevProc
-        command: ["bash", popup.scriptsDir + "music_panel.sh", "--previous"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._prevBuf += line + "\n" }
-        }
-        onExited: function() {
-            popup._parseStatus(popup._prevBuf)
-            popup._prevBuf = ""
-        }
     }
 
     Process {
@@ -156,14 +72,8 @@ PopupWindow {
             "rm -f ~/.var/app/com.spotify.Client/cache/spotify/Singleton{Lock,Socket,Cookie} 2>/dev/null; " +
             "exec bash '" + popup.scriptsDir + "tray_pill.sh' --toggle --class Spotify " +
             "--launch 'flatpak run com.spotify.Client'"]
-        onExited: function() {
-            statusProc.running = true
-        }
     }
 
-    // ─────────────────────────────────────────────────────
-    // UI
-    // ─────────────────────────────────────────────────────
     Rectangle {
         id: popupContent
         width: 300
@@ -183,7 +93,6 @@ PopupWindow {
             }
             spacing: 8
 
-            // ── Header ────────────────────────────────────
             Text {
                 text: "\uF001  Now Playing"
                 font.pixelSize: popup.fontSize
@@ -197,7 +106,6 @@ PopupWindow {
                 color: popup.mutedColor
             }
 
-            // ── Track info (when player available) ────────
             Column {
                 visible: popup.playerAvailable
                 width: parent.width
@@ -209,7 +117,7 @@ PopupWindow {
                     font.pixelSize: popup.fontSize + 1
                     font.family: popup.fontFamily
                     font.bold: true
-                    color: popup.playerStatus === "Playing" ? popup.accentGreen : popup.fgColor
+                    color: popup.activePlayer?.isPlaying ? popup.accentGreen : popup.fgColor
                     elide: Text.ElideRight
                 }
 
@@ -234,7 +142,6 @@ PopupWindow {
                 }
             }
 
-            // ── Progress bar ──────────────────────────────
             Column {
                 visible: popup.playerAvailable && popup.trackLength > 0
                 width: parent.width
@@ -277,7 +184,6 @@ PopupWindow {
                 }
             }
 
-            // ── Playback controls ─────────────────────────
             Row {
                 visible: popup.playerAvailable
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -287,31 +193,31 @@ PopupWindow {
                     text: "\uF048"
                     font.pixelSize: popup.fontSize + 4
                     font.family: popup.fontFamily
-                    color: popup.fgColor
+                    color: popup.activePlayer?.canGoPrevious ? popup.fgColor : popup.mutedColor
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: prevProc.running = true
+                        cursorShape: popup.activePlayer?.canGoPrevious ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        hoverEnabled: popup.activePlayer?.canGoPrevious ?? false
+                        onClicked: if (popup.activePlayer?.canGoPrevious) popup.activePlayer.previous()
                         onEntered: parent.color = popup.accentOrange
-                        onExited: parent.color = popup.fgColor
+                        onExited: parent.color = popup.activePlayer?.canGoPrevious ? popup.fgColor : popup.mutedColor
                     }
                 }
 
                 Text {
-                    text: popup.playerStatus === "Playing" ? "\uF04C" : "\uF04B"
+                    text: popup.activePlayer?.isPlaying ? "\uF04C" : "\uF04B"
                     font.pixelSize: popup.fontSize + 8
                     font.family: popup.fontFamily
-                    color: popup.accentGreen
+                    color: popup.activePlayer?.canTogglePlaying ? popup.accentGreen : popup.mutedColor
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: playPauseProc.running = true
+                        cursorShape: popup.activePlayer?.canTogglePlaying ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        hoverEnabled: popup.activePlayer?.canTogglePlaying ?? false
+                        onClicked: if (popup.activePlayer?.canTogglePlaying) popup.activePlayer.togglePlaying()
                         onEntered: parent.color = popup.accentYellow
-                        onExited: parent.color = popup.accentGreen
+                        onExited: parent.color = popup.activePlayer?.canTogglePlaying ? popup.accentGreen : popup.mutedColor
                     }
                 }
 
@@ -319,20 +225,19 @@ PopupWindow {
                     text: "\uF051"
                     font.pixelSize: popup.fontSize + 4
                     font.family: popup.fontFamily
-                    color: popup.fgColor
+                    color: popup.activePlayer?.canGoNext ? popup.fgColor : popup.mutedColor
 
                     MouseArea {
                         anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        hoverEnabled: true
-                        onClicked: nextProc.running = true
+                        cursorShape: popup.activePlayer?.canGoNext ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        hoverEnabled: popup.activePlayer?.canGoNext ?? false
+                        onClicked: if (popup.activePlayer?.canGoNext) popup.activePlayer.next()
                         onEntered: parent.color = popup.accentOrange
-                        onExited: parent.color = popup.fgColor
+                        onExited: parent.color = popup.activePlayer?.canGoNext ? popup.fgColor : popup.mutedColor
                     }
                 }
             }
 
-            // ── No player message ─────────────────────────
             Text {
                 visible: !popup.playerAvailable
                 text: "No media player running"
@@ -342,13 +247,11 @@ PopupWindow {
                 font.italic: true
             }
 
-            // ── Divider ───────────────────────────────────
             Rectangle {
                 width: parent.width; height: 1
                 color: popup.mutedColor
             }
 
-            // ── Open Spotify button (only when no other player active) ───
             Rectangle {
                 visible: popup.playerName === "" || popup.playerName.toLowerCase().indexOf("spotify") !== -1
                 width: parent.width

@@ -33,10 +33,19 @@ PopupWindow {
     required property string fontFamily
     required property int fontSize
 
-    // Expose state to parent for bar icon/text coloring
-    property bool vpnConnected: false
-    property string vpnServer: ""
-    property string vpnCountry: ""
+    required property string vpnScript
+    required property bool sharedVpnConnected
+    required property string sharedVpnServer
+    required property string sharedVpnCountry
+    required property var sharedConnectedInfo
+    required property var sharedProfiles
+    required property var refreshStatus
+
+    property bool vpnConnected: disconnectPending ? false : sharedVpnConnected
+    property string vpnServer: disconnectPending ? "" : sharedVpnServer
+    property string vpnCountry: disconnectPending ? "" : sharedVpnCountry
+    property var connectedInfo: disconnectPending ? null : sharedConnectedInfo
+    property var profiles: sharedProfiles
 
     implicitWidth: popupContent.width
     implicitHeight: popupContent.height
@@ -45,62 +54,14 @@ PopupWindow {
     // ─────────────────────────────────────────────────────
     // Internal state
     // ─────────────────────────────────────────────────────
-    property var connectedInfo: null
-    property var profiles: []
-    property string _statusBuf: ""
     property bool actionBusy: false
 
     // Optimistic disconnect state
     property bool disconnectPending: false
 
-    readonly property string scriptsDir:
-        Qt.resolvedUrl("../scripts/").toString().replace("file://", "")
-
-    // ─────────────────────────────────────────────────────
-    // Status polling
-    // ─────────────────────────────────────────────────────
-    Process {
-        id: vpnStatusProc
-        command: ["bash", popup.scriptsDir + "vpn_panel.sh", "--status"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._statusBuf += line }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(popup._statusBuf)
-                if (!popup.disconnectPending) {
-                    popup.connectedInfo = d.connected || null
-                    popup.vpnConnected = d.connected !== null && d.connected !== undefined
-                    popup.vpnServer = popup.vpnConnected ? (d.connected.name || "") : ""
-                    popup.vpnCountry = popup.vpnConnected ? (d.connected.country || "") : ""
-                }
-                popup.profiles = d.profiles || []
-            } catch(e) {}
-            popup._statusBuf = ""
-        }
-    }
-
-    // Background poll (always running) — keeps pill icon current
-    Timer {
-        id: bgPollTimer
-        interval: 10000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: {
-            if (!popup.visible)
-                vpnStatusProc.running = true
-        }
-    }
-
-    // Foreground poll (when popup is open) — faster updates
-    Timer {
-        id: fgPollTimer
-        interval: 3000
-        running: popup.visible
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: vpnStatusProc.running = true
+    onVisibleChanged: {
+        if (visible)
+            popup.refreshStatus()
     }
 
     // ─────────────────────────────────────────────────────
@@ -109,42 +70,20 @@ PopupWindow {
     Process {
         id: vpnConnectProc
         property string targetProfile: ""
-        command: ["bash", popup.scriptsDir + "vpn_panel.sh", "--connect", targetProfile]
-        stdout: SplitParser {
-            onRead: function(line) { popup._statusBuf += line }
-        }
+        command: ["bash", popup.vpnScript, "--connect", targetProfile]
         onExited: function() {
             popup.actionBusy = false
-            try {
-                var d = JSON.parse(popup._statusBuf)
-                popup.connectedInfo = d.connected || null
-                popup.vpnConnected = d.connected !== null && d.connected !== undefined
-                popup.vpnServer = popup.vpnConnected ? (d.connected.name || "") : ""
-                popup.vpnCountry = popup.vpnConnected ? (d.connected.country || "") : ""
-                popup.profiles = d.profiles || []
-            } catch(e) {}
-            popup._statusBuf = ""
+            popup.refreshStatus()
         }
     }
 
     Process {
         id: vpnDisconnectProc
-        command: ["bash", popup.scriptsDir + "vpn_panel.sh", "--disconnect"]
-        stdout: SplitParser {
-            onRead: function(line) { popup._statusBuf += line }
-        }
+        command: ["bash", popup.vpnScript, "--disconnect"]
         onExited: function() {
             popup.actionBusy = false
             popup.disconnectPending = false
-            try {
-                var d = JSON.parse(popup._statusBuf)
-                popup.connectedInfo = d.connected || null
-                popup.vpnConnected = d.connected !== null && d.connected !== undefined
-                popup.vpnServer = popup.vpnConnected ? (d.connected.name || "") : ""
-                popup.vpnCountry = popup.vpnConnected ? (d.connected.country || "") : ""
-                popup.profiles = d.profiles || []
-            } catch(e) {}
-            popup._statusBuf = ""
+            popup.refreshStatus()
         }
     }
 
@@ -242,10 +181,6 @@ PopupWindow {
                             if (popup.actionBusy) return
                             popup.actionBusy = true
                             popup.disconnectPending = true
-                            popup.connectedInfo = null
-                            popup.vpnConnected = false
-                            popup.vpnServer = ""
-                            popup.vpnCountry = ""
                             disconnectPendingReset.restart()
                             vpnDisconnectProc.running = true
                         }
@@ -481,4 +416,3 @@ PopupWindow {
         }
     }
 }
-

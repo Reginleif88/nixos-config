@@ -1,26 +1,7 @@
-{ config, pkgs, inputs, hostname, ... }:
+{ config, pkgs, hostname, ... }:
 
 let
-  # Upstream Hyprland workaround against HEAD commit ee58a513 (2026-05-09).
-  # `--replace-fail` makes the build error if upstream changes the matched string,
-  # so the patch announces itself when it can be dropped.
-  #
-  # device-tags null deref (commit 497b48e852, PR #13728):
-  #   InputManager calls `getDeviceString(devname, "tags")` with no fallback.
-  #   getConfigValueSafeDevice returns nullptr when the keyboard isn't in any
-  #   explicit `device { name = … }` block, and getDeviceString deref's it
-  #   without a null check → SIGSEGV in libinput new-keyboard signal.
-  #   Replacing the call expression with `std::string("")` makes the for-loop
-  #   iterate zero items, disabling the device-tags feature (which we don't use
-  #   anyway) until upstream null-checks the call. As of ee58a513 there are two
-  #   identical call sites (applyConfigToKeyboard and the second pass over
-  #   already-attached keyboards); substituteInPlace patches both.
-  hyprlandPkg = (inputs.hyprland.packages.${pkgs.stdenv.hostPlatform.system}.hyprland).overrideAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      substituteInPlace src/managers/input/InputManager.cpp \
-        --replace-fail 'CVarList2(Config::mgr()->getDeviceString(devname, "tags"))' 'CVarList2(std::string(""))'
-    '';
-  });
+  hyprlandPkg = pkgs.hyprland-patched;
   gruvbar = pkgs.stdenv.mkDerivation {
     pname = "gruvbar";
     version = "0.1";

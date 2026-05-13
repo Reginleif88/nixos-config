@@ -1,7 +1,7 @@
 //@ pragma UseQApplication
 // Quickshell status bar for Hyprland
 // Entry point: ~/.config/quickshell/shell.qml
-// Tested against Quickshell v0.2.1
+// Tested against Quickshell v0.3.0
 //
 // Features:
 //   - Hyprland workspace switcher (clickable, left side)
@@ -72,11 +72,36 @@ ShellRoot {
     readonly property real volumeRaw: defaultSink?.audio?.volume ?? 0
     readonly property int volumeLevel: Math.round(volumeRaw * 100)
     readonly property bool volumeMuted: defaultSink?.audio?.muted ?? false
-    property string activeWindowTitle: ""
-    property string _windowBuf: ""
+    readonly property string activeWindowTitle: Hyprland.activeToplevel?.title ?? ""
     property real cpuPercent: 0
     property real ramGb: 0
     property var _cpuPrev: null
+
+    readonly property var fallbackWorkspaceIdsByMonitor: ({
+        "DP-3": [1, 2],
+        "HDMI-A-1": [3, 4],
+        "eDP-1": [1, 2, 3, 4],
+        "Virtual-1": [1, 2, 3, 4]
+    })
+
+    function workspaceIdsForMonitor(monitor) {
+        if (monitor !== null && monitor !== undefined) {
+            var ids = []
+            var workspaces = Hyprland.workspaces.values
+            for (var i = 0; i < workspaces.length; i++) {
+                var ws = workspaces[i]
+                if (ws.id > 0 && ws.monitor !== null && ws.monitor.name === monitor.name)
+                    ids.push(ws.id)
+            }
+            if (ids.length > 0)
+                return ids.sort(function(a, b) { return a - b })
+
+            if (root.fallbackWorkspaceIdsByMonitor[monitor.name] !== undefined)
+                return root.fallbackWorkspaceIdsByMonitor[monitor.name]
+        }
+
+        return [1, 2, 3, 4]
+    }
 
     // ---------------------
     // Weather state (populated from weather.sh script)
@@ -94,6 +119,53 @@ ShellRoot {
     property string _weatherJsonBuf: ""
     readonly property string weatherScript:
         Qt.resolvedUrl("scripts/weather.sh").toString().replace("file://", "")
+
+    // ---------------------
+    // VPN state (shared by all monitor bars)
+    // ---------------------
+    readonly property string vpnScript:
+        Qt.resolvedUrl("scripts/vpn_panel.sh").toString().replace("file://", "")
+
+    property bool vpnConnected: false
+    property string vpnServer: ""
+    property string vpnCountry: ""
+    property var vpnConnectedInfo: null
+    property var vpnProfiles: []
+    property string _vpnStatusBuf: ""
+
+    function refreshVpnStatus() {
+        if (!vpnStatusProc.running) {
+            root._vpnStatusBuf = ""
+            vpnStatusProc.running = true
+        }
+    }
+
+    Process {
+        id: vpnStatusProc
+        command: ["bash", root.vpnScript, "--status"]
+        stdout: SplitParser {
+            onRead: function(line) { root._vpnStatusBuf += line }
+        }
+        onExited: function() {
+            try {
+                var d = JSON.parse(root._vpnStatusBuf)
+                root.vpnConnectedInfo = d.connected || null
+                root.vpnConnected = d.connected !== null && d.connected !== undefined
+                root.vpnServer = root.vpnConnected ? (d.connected.name || "") : ""
+                root.vpnCountry = root.vpnConnected ? (d.connected.country || "") : ""
+                root.vpnProfiles = d.profiles || []
+            } catch(e) {}
+            root._vpnStatusBuf = ""
+        }
+    }
+
+    Timer {
+        interval: 10000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: root.refreshVpnStatus()
+    }
 
     // ---------------------
     // Mail (Proton Mail desktop) state
@@ -323,51 +395,23 @@ ShellRoot {
         // bash wrapper: notify on success, silent on cancel (Escape key)
         command: ["bash", "-c",
             "FILE=$(grimblast copysave area) && " +
-            "notify-send -i camera-photo -t 3000 'Screenshot' \"Saved & copied:\\n$(basename $FILE)\""
+            "notify-send -i camera-photo -t 3000 'Screenshot' \"Saved & copied:\\n$(basename \"$FILE\")\""
         ]
     }
 
     // ---------------------
-    // Active window title via Hyprland IPC
-    // ---------------------
-    Process {
-        id: windowProc
-        command: ["hyprctl", "activewindow", "-j"]
-        stdout: SplitParser {
-            onRead: function(line) {
-                root._windowBuf += line
-            }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(root._windowBuf)
-                root.activeWindowTitle = d.title || ""
-            } catch(e) {
-                root.activeWindowTitle = ""
-            }
-            root._windowBuf = ""
-        }
-    }
-
-    // Refresh active window on every Hyprland event (instant)
+    // Refresh Hyprland models when compositor state changes.
     Connections {
         target: Hyprland
         function onRawEvent(event) {
-            // activewindow, openwindow, closewindow, focusedmon all affect the title
-            if (event.name === "activewindow" || event.name === "openwindow" ||
-                event.name === "closewindow"  || event.name === "focusedmon") {
-                windowProc.running = true
+            if (event.name === "openwindow" || event.name === "closewindow" ||
+                event.name === "movewindow" || event.name === "moveworkspace" ||
+                event.name === "workspace" || event.name === "focusedmon") {
+                Hyprland.refreshWorkspaces()
+                Hyprland.refreshToplevels()
             }
-        }
-    }
-
-    // Fallback poll for active window (catches edge cases)
-    Timer {
-        interval: 500
-        running: true
-        repeat: true
-        onTriggered: {
-            windowProc.running = true
+            if (event.name === "monitoradded" || event.name === "monitorremoved")
+                Hyprland.refreshMonitors()
         }
     }
 
@@ -511,11 +555,9 @@ ShellRoot {
             screen: modelData
 
             // Hyprland monitor object for this bar's screen
-            readonly property var hyprMonitor: Hyprland.monitors.values.find(
-                function(m) { return m.name === bar.screen.name }) ?? null
+            readonly property var hyprMonitor: Hyprland.monitorFor(bar.screen)
 
-            // Workspace IDs for this monitor: DP-3 gets 1,2 — HDMI-A-1 gets 3,4
-            readonly property var monitorWsIds: bar.screen.name === "DP-3" ? [1, 2] : [3, 4]
+            readonly property var monitorWsIds: root.workspaceIdsForMonitor(bar.hyprMonitor)
 
             // Anchor to the top edge, spanning full width
             anchors {
@@ -604,7 +646,7 @@ ShellRoot {
                                 readonly property int  wsId:     modelData
                                 readonly property var  wsObj:    Hyprland.workspaces.values.find(function(ws) { return ws.id === wsId }) ?? null
                                 readonly property bool isFocused: bar.hyprMonitor !== null && bar.hyprMonitor.activeWorkspace !== null && bar.hyprMonitor.activeWorkspace.id === wsId
-                                readonly property bool hasWindows: wsObj !== null
+                                readonly property bool hasWindows: wsObj !== null && wsObj.toplevels.values.length > 0
 
                                 Layout.preferredWidth:  24
                                 Layout.preferredHeight: root.barHeight - root.pillVPad * 2
@@ -650,7 +692,9 @@ ShellRoot {
                                 MouseArea {
                                     anchors.fill: parent
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: Hyprland.dispatch("workspace " + wsItem.wsId)
+                                    onClicked: wsItem.wsObj !== null
+                                        ? wsItem.wsObj.activate()
+                                        : Hyprland.dispatch("workspace " + wsItem.wsId)
                                 }
                             }
                         }
@@ -1362,6 +1406,14 @@ ShellRoot {
                 accentTeal: root.accentTeal
                 fontFamily: root.fontFamily
                 fontSize: root.fontSize
+
+                vpnScript: root.vpnScript
+                sharedVpnConnected: root.vpnConnected
+                sharedVpnServer: root.vpnServer
+                sharedVpnCountry: root.vpnCountry
+                sharedConnectedInfo: root.vpnConnectedInfo
+                sharedProfiles: root.vpnProfiles
+                refreshStatus: function() { root.refreshVpnStatus() }
             }
 
             // -------------------------------------------------------

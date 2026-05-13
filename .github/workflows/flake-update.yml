@@ -39,6 +39,6 @@ jobs:
             Pull and rebuild to apply:
             ```
             git pull
-            sudo nixos-rebuild switch --flake .#desktop
+            sudo nixos-rebuild switch --flake .#hyacinth  # or .#wisteria / .#clematis
             ```
           delete-branch: true

@@ -4,12 +4,20 @@
 #   1. Set up sops-nix age key and encrypt secrets (first-time only)
 set -euo pipefail
 
-HOSTNAME="${1:-desktop}"
+HOSTNAME="${1:-hyacinth}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 SOPS_KEY_DIR="$HOME/.config/sops/age"
 SOPS_KEY_FILE="$SOPS_KEY_DIR/keys.txt"
 SOPS_YAML="$REPO_DIR/secrets/.sops.yaml"
 SECRETS_FILE="$REPO_DIR/secrets/secrets.yaml"
+
+case "$HOSTNAME" in
+  hyacinth|wisteria|clematis) ;;
+  *)
+    echo "Unknown host '$HOSTNAME'. Expected one of: hyacinth, wisteria, clematis" >&2
+    exit 1
+    ;;
+esac
 
 echo "=== NixOS Target Machine Setup ==="
 echo ""
@@ -64,20 +72,45 @@ creation_rules:
 EOF
   echo "  ✓ Updated $SOPS_YAML with your public key"
 
-  # Prompt for secrets
+  # Prompt for every secret declared in modules/common.nix (universal) plus
+  # any host-specific secrets. Blank values are accepted — sops-nix only
+  # needs the keys to be present in the decrypted YAML. Fill in missing
+  # values later with: sops edit secrets/secrets.yaml
   echo ""
-  echo "  You'll need your GitHub Personal Access Token (PAT)"
-  echo "  and the names of your private repos to clone."
+  echo "  Enter values for declared secrets (press Enter to leave blank)."
   echo ""
-  read -rsp "  Enter your GitHub PAT (input hidden): " GITHUB_TOKEN
-  echo ""
-  read -rp "  Enter GitHub repos (space-separated, e.g. 'Repo1 Repo2'): " GITHUB_REPOS
 
-  # Write plaintext, then encrypt in place with sops
+  read -rsp "  github_token (GitHub PAT, hidden): " GITHUB_TOKEN
+  echo ""
+  read -rp  "  github_repos (space-separated, e.g. 'Repo1 Repo2'): " GITHUB_REPOS
+  read -rsp "  zlm_api_key (hidden): " ZLM_API_KEY
+  echo ""
+  read -rsp "  gtasks_client_id (hidden): " GTASKS_CLIENT_ID
+  echo ""
+  read -rsp "  gtasks_client_secret (hidden): " GTASKS_CLIENT_SECRET
+  echo ""
+  read -rsp "  keyring_password (hidden): " KEYRING_PASSWORD
+  echo ""
+
   cat > "$SECRETS_FILE" << EOF
 github_token: $GITHUB_TOKEN
 github_repos: $GITHUB_REPOS
+zlm_api_key: $ZLM_API_KEY
+gtasks_client_id: $GTASKS_CLIENT_ID
+gtasks_client_secret: $GTASKS_CLIENT_SECRET
+keyring_password: $KEYRING_PASSWORD
 EOF
+
+  if [ "$HOSTNAME" = "clematis" ]; then
+    read -rsp "  wayvnc_password (hidden): " WAYVNC_PASSWORD
+    echo ""
+    read -rsp "  cloudflare_dns_token (hidden): " CLOUDFLARE_DNS_TOKEN
+    echo ""
+    cat >> "$SECRETS_FILE" << EOF
+wayvnc_password: $WAYVNC_PASSWORD
+cloudflare_dns_token: $CLOUDFLARE_DNS_TOKEN
+EOF
+  fi
 
   sops --config "$SOPS_YAML" --encrypt --in-place "$SECRETS_FILE"
   echo "  ✓ Secrets encrypted at $SECRETS_FILE"

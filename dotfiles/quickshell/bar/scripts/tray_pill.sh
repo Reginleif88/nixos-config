@@ -23,17 +23,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 find_window() {
-    local filter=""
-    if [ -n "$match_class" ] && [ -n "$match_title" ]; then
-        filter="select((.class | test(\"$match_class\"; \"i\")) or (.title | test(\"$match_title\"; \"i\")))"
-    elif [ -n "$match_class" ]; then
-        filter="select(.class | test(\"$match_class\"; \"i\"))"
-    elif [ -n "$match_title" ]; then
-        filter="select(.title | test(\"$match_title\"; \"i\"))"
-    else
+    if [ -z "$match_class" ] && [ -z "$match_title" ]; then
         echo "" && return
     fi
-    hyprctl clients -j | jq -c ".[] | $filter" | head -1
+
+    hyprctl clients -j | jq -c \
+        --arg class "$match_class" \
+        --arg title "$match_title" '
+        .[]
+        | select(
+            (($class != "") and (((.class // "") | ascii_downcase) == ($class | ascii_downcase)))
+            or
+            (($title != "") and (((.title // "") | ascii_downcase) | contains($title | ascii_downcase)))
+        )
+    ' | head -1
 }
 
 case "$action" in
@@ -48,8 +51,11 @@ case "$action" in
         address=$(echo "$client" | jq -r '.address')
         workspace=$(echo "$client" | jq -r '.workspace.name')
 
-        printf '{"running":true,"title":"%s","address":"%s","workspace":"%s"}\n' \
-            "$title" "$address" "$workspace"
+        jq -nc \
+            --arg title "$title" \
+            --arg address "$address" \
+            --arg workspace "$workspace" \
+            '{running:true,title:$title,address:$address,workspace:$workspace}'
         ;;
 
     --toggle)

@@ -16,11 +16,6 @@
 
     hyprland.url = "github:hyprwm/Hyprland";
 
-    hyprland-plugins = {
-      url = "github:hyprwm/hyprland-plugins";
-      inputs.hyprland.follows = "hyprland";
-    };
-
     dwproton.url = "github:imaviso/dwproton-flake";
 
     quickshell = {
@@ -38,11 +33,6 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
-
-    ascii-vault = {
-      url = "github:lorediggia/ascii-vault";
-      flake = false;
-    };
 
     claude-code = {
       url = "github:sadjow/claude-code-nix";
@@ -66,9 +56,7 @@
 
       commonOverlays = [
         inputs.nix-vscode-extensions.overlays.default
-        (import ./overlays/default.nix {
-          ascii-vault-src = inputs.ascii-vault;
-        })
+        (import ./overlays/default.nix { inherit inputs; })
       ];
 
       mkHost = hostname: hostDir: nixpkgs.lib.nixosSystem {

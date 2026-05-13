@@ -43,7 +43,7 @@ get_connected() {
     # Get signal strength for connected network
     local signal
     signal=$(nmcli -t -f SSID,SIGNAL dev wifi list --rescan no 2>/dev/null \
-        | grep "^${active_ssid}:" | head -1 | cut -d: -f2)
+        | awk -F: -v ssid="$active_ssid" '$1 == ssid { print $2; exit }')
     signal="${signal:-0}"
 
     local icon
@@ -52,7 +52,7 @@ get_connected() {
     # Get security
     local security
     security=$(nmcli -t -f SSID,SECURITY dev wifi list --rescan no 2>/dev/null \
-        | grep "^${active_ssid}:" | head -1 | cut -d: -f2)
+        | awk -F: -v ssid="$active_ssid" '$1 == ssid { print $2; exit }')
     security="${security:-Open}"
 
     # Get IP (cached per SSID, refreshed every 30s)

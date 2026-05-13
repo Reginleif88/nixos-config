@@ -18,7 +18,6 @@ in
     scrcpy
     escrcpy
     winboat
-    ascii-vault
     blueman
     proton-vpn
     protonmail-desktop
@@ -127,13 +126,5 @@ in
       categories = [ "Development" "IDE" ];
     };
   };
-
-  # Symlink ascii-vault config dir to repo for backup
-  home.activation.ascii-vault = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    dir="$HOME/.config/ascii-vault"
-    repo="/home/reginleif88/Documents/nixos-config/dotfiles/ascii-vault"
-    rm -rf "$dir"
-    ln -sfn "$repo" "$dir"
-  '';
 
 }

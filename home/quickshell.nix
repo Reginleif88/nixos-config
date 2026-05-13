@@ -37,11 +37,14 @@ in
     quickshellPkg
     pkgs.fuzzel
     pkgs.grimblast
+    pkgs.libnotify
     pkgs.cliphist
     pkgs.wl-clipboard
     pkgs.swayimg
     pkgs.networkmanager
+    pkgs.iw
     pkgs.bluez
+    pkgs.pulseaudio
     pkgs.swaynotificationcenter
   ];
 

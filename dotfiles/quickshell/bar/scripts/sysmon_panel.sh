@@ -19,8 +19,16 @@ parse_procs() {
         # strip common wrappers like .wrapped, -wrapped
         gsub(/[.-]wrapped$/, "", name)
         if (name == "") name="?"
-        printf "{\"pid\":%s,\"cpu\":%.1f,\"ram\":%.1f,\"name\":\"%s\"}\n", pid, cpu, ram, name
-    }' | jq -s '.'
+        printf "%s\t%.1f\t%.1f\t%s\n", pid, cpu, ram, name
+    }' | jq -Rn '
+        [inputs
+         | split("\t")
+         | select(length == 4)
+         | {pid:(.[0] | tonumber),
+            cpu:(.[1] | tonumber),
+            ram:(.[2] | tonumber),
+            name:.[3]}]
+    '
 }
 
 build_status() {

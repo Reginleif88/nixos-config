@@ -18,20 +18,28 @@ import base64
 from urllib.request import urlopen
 
 
-def find_cdp_port():
-    """Find the CDP port from the electron process listening on localhost."""
+def find_cdp_ports():
+    """Find likely Electron CDP ports, preferring Proton Mail processes."""
+    preferred = []
+    fallback = []
     try:
         out = subprocess.check_output(
             ["ss", "-tlnp"], stderr=subprocess.DEVNULL, text=True
         )
         for line in out.splitlines():
-            if "electron" in line:
-                m = re.search(r"127\.0\.0\.1:(\d+)", line)
-                if m:
-                    return int(m.group(1))
+            if "electron" not in line.lower() and "proton" not in line.lower():
+                continue
+            m = re.search(r"127\.0\.0\.1:(\d+)", line)
+            if not m:
+                continue
+            port = int(m.group(1))
+            if "proton" in line.lower() or "mail" in line.lower():
+                preferred.append(port)
+            else:
+                fallback.append(port)
     except Exception:
         pass
-    return None
+    return list(dict.fromkeys(preferred + fallback))
 
 
 def get_ws_url(port):
@@ -122,7 +130,7 @@ def get_unread(s):
     r = json.loads(ws_recv(s))
     wc_id = r.get("result", {}).get("result", {}).get("value", -1)
     if wc_id == -1:
-        return 0
+        return None
 
     # Step 2: Execute JS in that webContents to read the unread counter
     expr_count = f"""
@@ -150,26 +158,29 @@ def get_unread(s):
 
 def main():
     try:
-        port = find_cdp_port()
-        if not port:
+        ports = find_cdp_ports()
+        if not ports:
             print(0)
             return
 
-        ws_url = get_ws_url(port)
-        if not ws_url:
-            print(0)
-            return
+        for port in ports:
+            ws_url = get_ws_url(port)
+            if not ws_url:
+                continue
 
-        s = ws_connect(ws_url)
-        if not s:
-            print(0)
-            return
+            s = ws_connect(ws_url)
+            if not s:
+                continue
 
-        try:
-            count = get_unread(s)
-            print(count)
-        finally:
-            s.close()
+            try:
+                count = get_unread(s)
+                if count is not None:
+                    print(count)
+                    return
+            finally:
+                s.close()
+
+        print(0)
     except Exception:
         print(0)
 
