@@ -959,6 +959,44 @@ ShellRoot {
                         }
                     }
 
+                    // ---- Battery pill (auto-hides on hosts without a battery) ----
+                    Pill {
+                        id: batteryPill
+                        visible: UPower.displayDevice && UPower.displayDevice.isLaptopBattery
+                        innerSpacing: 6
+
+                        readonly property var batt: UPower.displayDevice
+                        readonly property int pct: batt ? Math.round(batt.percentage * 100) : 0
+                        readonly property bool charging: batt
+                            && (batt.state === UPowerDeviceState.Charging
+                             || batt.state === UPowerDeviceState.FullyCharged
+                             || batt.state === UPowerDeviceState.PendingCharge)
+                        readonly property color battColor:
+                              charging  ? root.accentGreen
+                            : pct < 15  ? root.accentRed
+                            : pct < 30  ? root.accentYellow
+                                        : root.accentTeal
+
+                        Text {
+                            text: batteryPill.charging ? ""           // bolt
+                                : batteryPill.pct > 80 ? ""           // battery-full
+                                : batteryPill.pct > 60 ? ""           // three-quarters
+                                : batteryPill.pct > 40 ? ""           // half
+                                : batteryPill.pct > 15 ? ""           // quarter
+                                :                        ""           // empty
+                            color: batteryPill.battColor
+                            font.pixelSize: root.fontSize
+                            font.family:    root.fontFamily
+                        }
+
+                        Text {
+                            text: batteryPill.pct + "%"
+                            color: batteryPill.battColor
+                            font.pixelSize: root.fontSize
+                            font.family:    root.fontFamily
+                        }
+                    }
+
                     // ---- Network pill ----
                     Pill {
                         Text {
