@@ -72,17 +72,18 @@
   users.users.reginleif88.extraGroups = [ "render" "uinput" ];
 
 
-  # TCP buffer headroom for sustained H.264 streaming bursts. Default
-  # tcp_wmem max is 4 MiB which is fine for ~500 kbps average wayvnc
-  # traffic but can stall on full-screen scroll bursts (≥10 Mbps for a
-  # second or two). 8 MiB gives the kernel room to absorb a burst
-  # without applying back-pressure to wayvnc's encoder. Memory is
-  # only consumed when actually buffered, so this is essentially free.
+  # TCP buffer headroom and WAN-friendly queueing for sustained H.264
+  # streaming bursts. The larger buffers absorb short full-screen scroll
+  # bursts without applying back-pressure to wayvnc's encoder; fq+BBR keeps
+  # the public noVNC path from building unnecessary queue latency.
+  boot.kernelModules = [ "tcp_bbr" ];
   boot.kernel.sysctl = {
     "net.core.rmem_max"   = 8388608;
     "net.core.wmem_max"   = 8388608;
+    "net.core.default_qdisc" = "fq";
     "net.ipv4.tcp_rmem"   = "4096 87380 8388608";
     "net.ipv4.tcp_wmem"   = "4096 65536 8388608";
+    "net.ipv4.tcp_congestion_control" = "bbr";
   };
 
   # Host-specific sops secrets (universals in modules/common.nix)

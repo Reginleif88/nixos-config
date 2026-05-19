@@ -250,6 +250,7 @@ in
       #      browser. Previously (-g omitted) the EPERM came from a
       #      cross-GPU dumb-buffer fallback when virtio-gpu was the
       #      compositor's render device and amdgpu held the encoder.
+      # -p: emit one-second capture counters while clients are connected.
       # -L info: surface client connect/encoder negotiation in journalctl.
       # -C:  config file path with auth + bind address.
       #
@@ -259,7 +260,7 @@ in
       # on top of the H.264 canvas. That decouples cursor movement from
       # the encoder frame schedule: pointer feedback runs at WebSocket
       # RTT instead of waiting for the next P-frame.
-      ExecStart = "${pkgs.wayvnc}/bin/wayvnc -L info -f 60 -g -o DP-1 -C %t/wayvnc/config";
+      ExecStart = "${pkgs.wayvnc}/bin/wayvnc -L info -p -f 60 -g -o DP-1 -C %t/wayvnc/config";
     };
 
   };
@@ -312,13 +313,18 @@ in
         printf '%s: 127.0.0.1:5900\n' "$token" > "$RUNTIME_DIRECTORY/tokens"
         chmod 600 "$RUNTIME_DIRECTORY/tokens"
 
+        low_latency_url="/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=off&quality=6&compression=0&logging=info&path=websockify%3Ftoken%3D$token&host=&port="
+        balanced_url="/vnc.html?autoconnect=1&reconnect=1&reconnect_delay=1000&resize=scale&quality=6&compression=2&path=websockify%3Ftoken%3D$token&host=&port="
+        low_latency_url_html="$(printf '%s' "$low_latency_url" | ${pkgs.gnused}/bin/sed 's/&/\&amp;/g')"
+        balanced_url_html="$(printf '%s' "$balanced_url" | ${pkgs.gnused}/bin/sed 's/&/\&amp;/g')"
+
         cat > "$webroot/index.html" <<EOF
         <!doctype html>
         <html lang="en">
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <meta http-equiv="refresh" content="0; url=/vnc.html?autoconnect=1&amp;reconnect=1&amp;reconnect_delay=1000&amp;resize=scale&amp;path=websockify%3Ftoken%3D$token&amp;host=&amp;port=">
+            <meta http-equiv="refresh" content="0; url=$low_latency_url_html">
             <title>clematis</title>
           </head>
           <body>
@@ -327,14 +333,46 @@ in
                 autoconnect: "1",
                 reconnect: "1",
                 reconnect_delay: "1000",
-                resize: "scale",
+                resize: "off",
+                quality: "6",
+                compression: "0",
+                logging: "info",
                 path: "websockify?token=$token",
                 host: "",
                 port: ""
               });
               window.location.replace("/vnc.html?" + params.toString());
             </script>
-            <a href="/vnc.html?autoconnect=1&amp;reconnect=1&amp;reconnect_delay=1000&amp;resize=scale&amp;path=websockify%3Ftoken%3D$token&amp;host=&amp;port=">Open noVNC</a>
+            <a href="$low_latency_url_html">Open noVNC</a>
+          </body>
+        </html>
+        EOF
+
+        cat > "$webroot/balanced.html" <<EOF
+        <!doctype html>
+        <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta http-equiv="refresh" content="0; url=$balanced_url_html">
+            <title>clematis balanced</title>
+          </head>
+          <body>
+            <script>
+              const params = new URLSearchParams({
+                autoconnect: "1",
+                reconnect: "1",
+                reconnect_delay: "1000",
+                resize: "scale",
+                quality: "6",
+                compression: "2",
+                path: "websockify?token=$token",
+                host: "",
+                port: ""
+              });
+              window.location.replace("/vnc.html?" + params.toString());
+            </script>
+            <a href="$balanced_url_html">Open noVNC</a>
           </body>
         </html>
         EOF
@@ -344,7 +382,10 @@ in
           "autoconnect": true,
           "reconnect": true,
           "reconnect_delay": 1000,
-          "resize": "scale",
+          "resize": "off",
+          "quality": 6,
+          "compression": 0,
+          "logging": "info",
           "path": "websockify?token=$token",
           "host": "",
           "port": ""
