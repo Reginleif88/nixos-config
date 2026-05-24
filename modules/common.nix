@@ -31,6 +31,15 @@
     trusted-public-keys = [ "lantian:EeAUQ+W+6r7EtwnmYjeVwx5kOGEBpjlBfPlzGlTNvHc=" ];
   };
 
+  # Keep the desktop responsive while large packages compile from source.
+  # A cache-miss rebuild spawns dozens of cc1plus jobs that otherwise compete
+  # 1:1 with the compositor and media players for CPU/IO, starving them of the
+  # scheduler slots they need to hit each vblank (perceived as video judder).
+  # SCHED_IDLE + idle IO class makes build jobs yield to all interactive work;
+  # builds run a bit slower when the machine is busy, full speed when it's idle.
+  nix.daemonCPUSchedPolicy = "idle";
+  nix.daemonIOSchedClass = "idle";
+
   users.users.reginleif88 = {
     isNormalUser = true;
     description = "reginleif88";
