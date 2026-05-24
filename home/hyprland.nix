@@ -15,6 +15,24 @@ in
   wayland.windowManager.hyprland = {
     enable = true;
     package = hyprlandPkg;
+
+    # Adopt home-manager's new default config backend (silences the
+    # configType deprecation warning) and emit a generated hypr/.luarc.json
+    # so an editor's Lua LSP knows the `hl` API. We don't use HM's renderer:
+    # the real config is our hand-written Lua tree placed via xdg.configFile
+    # below, so HM generates no Hyprland config of its own.
+    configType = "lua";
+
+    # Disable HM's systemd integration. Under configType = "lua" it would
+    # otherwise generate its own hypr/hyprland.lua, colliding with the
+    # hand-written one in xdg.configFile. Disabling it also flips the
+    # module's shouldGenerate to false (no hyprland.lua/.conf emitted) and
+    # silences the "systemd.enable but no settings" warning. We re-create
+    # hyprland-session.target ourselves (below) and start it from
+    # autostart.lua, because HM's startup hook only ever landed in
+    # hyprland.conf — which Hyprland 0.55 ignores once a hyprland.lua
+    # exists, leaving graphical-session.target (hyprpolkitagent et al.) dead.
+    systemd.enable = false;
   };
 
   # Place Hyprland config files
@@ -63,6 +81,24 @@ in
   home.file.".config/hypr/smart-close.sh" = {
     source = ../dotfiles/hypr/smart-close.sh;
     executable = true;
+  };
+
+  # Session target that graphical-session.target BindsTo. home-manager
+  # normally provides this when hyprland.systemd.enable = true, which we
+  # turned off (see above) to stop it generating hyprland.lua. autostart.lua
+  # starts this target after publishing the Wayland env into the systemd/
+  # D-Bus user manager; graphical-session.target has RefuseManualStart=yes,
+  # so it can only be brought up by being pulled in through this one. This
+  # is what (re)starts hyprpolkitagent and any other graphical-session.target
+  # user units.
+  systemd.user.targets.hyprland-session = {
+    Unit = {
+      Description = "Hyprland compositor session";
+      Documentation = [ "man:systemd.special(7)" ];
+      BindsTo = [ "graphical-session.target" ];
+      Wants = [ "graphical-session-pre.target" ];
+      After = [ "graphical-session-pre.target" ];
+    };
   };
 
   # Enable hyprpolkitagent as a systemd user service
