@@ -24,6 +24,7 @@ in
   ] ++ lib.optionals isGraphical [
     ./apps.nix
     ./browser.nix
+    ./mpv.nix
   ];
 
   home.username = "reginleif88";
