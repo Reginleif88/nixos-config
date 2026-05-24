@@ -33,6 +33,23 @@ in
   # the patched library so the linked /nix/store path actually changes.
   wayvnc = prev.wayvnc.override { neatvnc = final.neatvnc; };
 
+  # ── jedi-language-server: tolerate jedi 0.20 ───────────────────────
+  # nixpkgs (pinned 15f4ee45) ships jedi 0.20.0, but jedi-language-server
+  # 0.46.0 — the latest upstream — still pins `jedi>=0.19.2,<0.20`, so
+  # pythonRuntimeDepsCheckHook rejects the build. The cap is upstream
+  # caution, not a real break: the relaxed derivation builds, passes its
+  # own test suite, and substitutes straight from cache.nixos.org (nixpkgs
+  # HEAD already relaxed it the same way). Pulled in transitively by the
+  # ms-python VSCode extension (nix-vscode-extensions). Drop this once
+  # nixpkgs advances past the fix or jedi-language-server widens its pin.
+  pythonPackagesExtensions = (prev.pythonPackagesExtensions or [ ]) ++ [
+    (pyfinal: pyprev: {
+      jedi-language-server = pyprev.jedi-language-server.overridePythonAttrs (o: {
+        pythonRelaxDeps = (o.pythonRelaxDeps or [ ]) ++ [ "jedi" ];
+      });
+    })
+  ];
+
   gtasks = prev.buildGoModule {
     pname = "gtasks";
     version = "0.13.0";
