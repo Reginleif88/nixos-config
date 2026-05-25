@@ -22,6 +22,10 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("wl-paste --type image --watch cliphist store")
   hl.exec_cmd("wl-paste --primary --type text --watch cliphist store")
   hl.exec_cmd("wl-paste --primary --type image --watch cliphist store")
+  -- hyacinth only: auto-open the tuned mpv when Stremio's "Copy Stream Link" lands on
+  -- the clipboard. The command only exists on hyacinth (home/stremio.nix), so the
+  -- `command -v` guard makes this a no-op on the other Hyprland hosts.
+  hl.exec_cmd("command -v stremio-to-mpv >/dev/null && wl-paste --type text --watch stremio-to-mpv --filter")
   hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'")
   hl.exec_cmd("swaync")
   hl.exec_cmd("proton-mail")
