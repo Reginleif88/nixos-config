@@ -17,9 +17,11 @@ let
       mpv          # the player (reads ~/.config/mpv/mpv.conf from home/mpv.nix)
       wl-clipboard # wl-paste (clipboard read)
       libnotify    # notify-send on failure
-      playerctl    # best-effort pause of Stremio (no-op if no MPRIS player)
-      util-linux   # setsid (detach mpv from the keybind/watcher)
-      coreutils    # cat, date
+      pulseaudio   # pactl — mute/unmute Stremio's stream (no MPRIS to pause it)
+      gawk         # parse pactl sink-inputs for Stremio's stream id
+      gnugrep      # grep -a over leveldb for the resume timeOffset
+      util-linux   # setsid (detach the play worker from the keybind/watcher)
+      coreutils    # cat, date, ls, head
     ];
     text = builtins.readFile ../scripts/stremio-to-mpv.sh;
   };
