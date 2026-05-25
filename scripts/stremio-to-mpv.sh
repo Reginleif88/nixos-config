@@ -94,7 +94,10 @@ case ${1:-} in
     url=${2:-}
     [[ -n $url ]] || exit 0
     secs=$(stremio_resume_secs) || secs=""
-    mpv_args=(--fullscreen --force-window=immediate "--alang=eng,en")
+    # --slang + subs-with-matching-audio: dual-audio anime embeds English ASS subs that
+    # aren't "default"-flagged, so mpv won't show them without an explicit --slang, and
+    # it can also skip subs when the audio language already matches. Force English subs on.
+    mpv_args=(--fullscreen --force-window=immediate "--alang=eng,en" "--slang=eng,en" --subs-with-matching-audio=yes)
     [[ -n ${secs:-} ]] && mpv_args+=(--start="$secs")
     set_stremio_mute 1
     trap 'set_stremio_mute 0' EXIT
