@@ -7,9 +7,10 @@ let
   # scripts/stremio-to-mpv.sh; writeShellApplication adds the shebang + strict mode
   # and runs shellcheck at build time.
   #
-  # Wired up in two places (gated to hyacinth by this module's import):
-  #   - dotfiles/hypr/autostart.lua : `wl-paste --watch stremio-to-mpv --filter`
-  #     auto-opens mpv when you click Stremio's "Copy Stream Link".
+  # Wired up (gated to hyacinth by this module's import):
+  #   - dotfiles/hypr/autostart.lua : `stremio-to-mpv --watch-storage` auto-opens mpv
+  #     when you click Play in Stremio (watches leveldb for the resolved stream URL);
+  #     `wl-paste --watch stremio-to-mpv --filter` does the same on "Copy Stream Link".
   #   - dotfiles/hypr/binds.lua     : SUPER+P runs `stremio-to-mpv` on demand.
   stremio-to-mpv = pkgs.writeShellApplication {
     name = "stremio-to-mpv";
@@ -19,7 +20,8 @@ let
       libnotify    # notify-send on failure
       pulseaudio   # pactl — mute/unmute Stremio's stream (no MPRIS to pause it)
       gawk         # parse pactl sink-inputs for Stremio's stream id
-      gnugrep      # grep -a over leveldb for the resume timeOffset
+      gnugrep      # grep -a over leveldb for the stream URL + resume timeOffset
+      inotify-tools # inotifywait — watch leveldb so Play auto-opens mpv
       util-linux   # setsid (detach the play worker from the keybind/watcher)
       coreutils    # cat, date, ls, head
     ];
