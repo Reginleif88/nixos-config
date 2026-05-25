@@ -25,9 +25,6 @@ in
     ./apps.nix
     ./browser.nix
     ./mpv.nix
-  ] ++ lib.optionals (hostname == "hyacinth") [
-    # NVIDIA box: patch Stremio's embedded mpv for display-synced playback.
-    ./stremio.nix
   ];
 
   home.username = "reginleif88";
