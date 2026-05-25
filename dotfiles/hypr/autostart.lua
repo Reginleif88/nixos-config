@@ -23,10 +23,8 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("wl-paste --primary --type text --watch cliphist store")
   hl.exec_cmd("wl-paste --primary --type image --watch cliphist store")
   -- hyacinth only (the command only exists there; the `command -v` guard no-ops
-  -- elsewhere): auto-open the tuned mpv for Stremio playback. --watch-storage fires
-  -- when you click Play (new stream URL in leveldb); the wl-paste watcher fires on
-  -- "Copy Stream Link". Both de-dupe via a shared last-URL guard.
-  hl.exec_cmd("command -v stremio-to-mpv >/dev/null && stremio-to-mpv --watch-storage")
+  -- elsewhere): auto-open the tuned mpv when Stremio's "Copy Stream Link" lands on the
+  -- clipboard.
   hl.exec_cmd("command -v stremio-to-mpv >/dev/null && wl-paste --type text --watch stremio-to-mpv --filter")
   hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'")
   hl.exec_cmd("swaync")

@@ -8,8 +8,6 @@
 # window/audio flags + a best-effort resume position here.
 #
 # Triggers (all funnel into the same play worker):
-#   --watch-storage  watch Stremio's leveldb; when a NEW resolved stream URL appears
-#                    (i.e. you clicked Play), auto-launch mpv. Runs from autostart.
 #   --filter         read a clipboard value on stdin (wl-paste --watch mode) and
 #                    launch if it's a stream URL — auto-open on "Copy Stream Link".
 #   <none>           read the current clipboard and play it (SUPER+P hotkey).
@@ -26,20 +24,6 @@ strict_re='^(http://(127\.0\.0\.1|localhost):11470/|https?://[^[:space:]]+\.(mkv
 lenient_re='^https?://[^[:space:]"]+$'
 
 leveldb_dir="$HOME/.var/app/com.stremio.Stremio/data/Smart Code ltd/Stremio/QtWebEngine/Default/Local Storage/leveldb"
-
-# The resolved stream URL Stremio writes to leveldb on Play ends in a media extension,
-# followed by adjacent leveldb bytes; the regex stops at the extension. Stremio keeps
-# only the current stream, so the newest file's last match is what's playing now.
-get_current_stream_url() {
-  local newest url
-  # leveldb files are predictable numerics (000354.log), so ls -t is safe.
-  # shellcheck disable=SC2012
-  newest=$(ls -t "$leveldb_dir"/*.log "$leveldb_dir"/*.ldb 2>/dev/null | head -1) || return 0
-  [[ -n ${newest:-} ]] || return 0
-  url=$(grep -aoE 'https?://[^[:space:]"]*\.(mkv|mp4|avi|m4v|webm|m3u8|ts)' "$newest" 2>/dev/null | tail -1) || return 0
-  [[ -n ${url:-} ]] || return 0
-  printf '%s' "$url"
-}
 
 # Mute/unmute Stremio's PipeWire stream(s). Stremio exposes no MPRIS and Hyprland's
 # key-send is unavailable under Lua config, so muting the audio stream is the only
@@ -102,18 +86,6 @@ case ${1:-} in
     set_stremio_mute 1
     trap 'set_stremio_mute 0' EXIT
     mpv "${mpv_args[@]}" -- "$url" >/dev/null 2>&1 </dev/null || true
-    ;;
-  --watch-storage)
-    [[ -d $leveldb_dir ]] || exit 0
-    # On each leveldb write, re-read the current stream URL; launch_guarded fires mpv
-    # only when it's a new stream (you hit Play on something different).
-    inotifywait -m -q -e modify -e create -e moved_to --format '%f' "$leveldb_dir" 2>/dev/null \
-      | while read -r _evt; do
-          url=$(get_current_stream_url) || true
-          [[ -n ${url:-} ]] || continue
-          [[ $url =~ $strict_re ]] || continue
-          launch_guarded "$url"
-        done
     ;;
   --filter)
     IFS=$'\n' read -r url <<<"$(cat)" || true   # first line of the new clipboard value
