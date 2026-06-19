@@ -16,7 +16,17 @@
   hardware.graphics = {
     enable = true;
     enable32Bit = true;
+    # VA-API-over-NVDEC bridge: translates VA-API decode calls onto Pascal's
+    # NVDEC engine (paired with LIBVA_DRIVER_NAME=nvidia + NVD_BACKEND=direct
+    # below). Usable by Firefox/mpv/ffmpeg. NOT usable by Chromium — it hardcodes
+    # a skip for nvidia-drm devices, so google-chrome (and the `boosteroid`
+    # launcher) always software-decode regardless of this driver.
+    extraPackages = [ pkgs.nvidia-vaapi-driver ];
   };
+
+  # vainfo — lists which VA-API decode/encode profiles the NVDEC bridge exposes
+  # (H.264/HEVC/VP9 VLD all present on this Pascal card). Diagnostic only.
+  environment.systemPackages = [ pkgs.libva-utils ];
 
   # VRAM preservation across suspend/hibernate
   boot.kernelParams = [ "nvidia.NVreg_PreserveVideoMemoryAllocations=1" ];

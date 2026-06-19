@@ -19,8 +19,9 @@ in
     escrcpy
     winboat
     blueman
-    proton-vpn
-    protonmail-desktop
+    # protonmail-desktop — moved to Flatpak (me.proton.Mail) to escape nixpkgs
+    # packaging lag; Flathub tracks Proton's forced-minimum bumps via weekly
+    # services.flatpak.update.auto. See modules/core.nix flatpak packages.
     aseprite
     chromium
     playwright-driver.browsers
@@ -43,6 +44,34 @@ in
           --set SDL_VIDEODRIVER x11
       '';
     })
+
+    # Boosteroid cloud gaming. There is no native NixOS package; the official
+    # "client" is just Chromium-over-WebRTC anyway, so we run the web player as
+    # a dedicated fullscreen PWA via google-chrome (which ships proprietary
+    # H.264 — required, since Boosteroid streams H.264).
+    #
+    # NOTE: video decode here is SOFTWARE, and that is not fixable. Chromium
+    # hardcodes "Should skip nVidia device named: nvidia-drm" in vaapi_wrapper.cc
+    # and refuses to enumerate NVIDIA DRM devices for VA-API, upstream of any
+    # flag — so --ignore-gpu-blocklist / VaapiIgnoreDriverChecks do nothing on
+    # this Pascal box (verified 2026-06-19: nvidia-smi `dec` stayed 0 while Chrome
+    # played 1080p H.264). Software H.264 decode is light at 1080p, so this is
+    # fine. The browser that CAN HW-decode on NVIDIA is Firefox (no nvidia-drm
+    # skip) + nvidia-vaapi-driver, if it ever becomes worth switching for.
+    #
+    # Flags, by purpose:
+    #   --app / --start-fullscreen  chromeless fullscreen window → direct scanout
+    #   --class=boosteroid          deterministic app_id for the Hyprland rule
+    #   --ozone-platform=wayland    native Wayland (GPU compositing confirmed OK);
+    #                               swap to x11 if the compositor ever misbehaves
+    (pkgs.writeShellScriptBin "boosteroid" ''
+      exec ${pkgs.google-chrome}/bin/google-chrome-stable \
+        --app=https://cloud.boosteroid.com/ \
+        --class=boosteroid \
+        --ozone-platform=wayland \
+        --start-fullscreen \
+        "$@"
+    '')
   ];
 
   # Point Playwright at Nix-managed browsers instead of downloading its own
@@ -124,6 +153,16 @@ in
       icon = "arduino-ide";
       comment = "Arduino IDE";
       categories = [ "Development" "IDE" ];
+    };
+  } // lib.optionalAttrs (hostname == "hyacinth") {
+    boosteroid = {
+      name = "Boosteroid";
+      exec = "boosteroid";
+      icon = "applications-games";
+      comment = "Boosteroid cloud gaming (fullscreen PWA, HW decode)";
+      categories = [ "Game" ];
+      # Must equal the launcher's --class so the .desktop maps to the window.
+      settings.StartupWMClass = "boosteroid";
     };
   };
 

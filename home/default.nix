@@ -24,10 +24,6 @@ in
   ] ++ lib.optionals isGraphical [
     ./apps.nix
     ./browser.nix
-    ./mpv.nix
-  ] ++ lib.optionals (isGraphical && hostname == "hyacinth") [
-    # Stremio→mpv routing — hyacinth only (Pascal/NVIDIA-580 embedded-libmpv crash).
-    ./stremio.nix
   ];
 
   home.username = "reginleif88";

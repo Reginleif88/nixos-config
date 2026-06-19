@@ -74,6 +74,7 @@
 
     packages = [
       "com.spotify.Client"
+      "me.proton.Mail"
       "com.stremio.Stremio"
       "io.podman_desktop.PodmanDesktop"
       { appId = "com.nvidia.geforcenow"; origin = "GeForceNOW"; }

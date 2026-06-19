@@ -25,11 +25,30 @@ hl.window_rule({
   immediate = true,
 })
 
+-- Boosteroid cloud-gaming PWA (google-chrome --class=boosteroid). `immediate`
+-- allows tearing so the WebRTC stream presents with the lowest latency, same
+-- as Moonlight. The launcher already starts it fullscreen.
+hl.window_rule({
+  name      = "boosteroid-immediate",
+  match     = { class = "^(boosteroid)$" },
+  immediate = true,
+})
+
 hl.window_rule({
   name  = "move-hyprland-run",
   match = { class = "hyprland-run" },
   move  = { "20", "monitor_h-120" },
   float = true,
+})
+
+-- Start Proton Mail minimized: park it on special:minimized the instant it
+-- opens. `silent` sends it there without switching the view, so it never
+-- flashes on screen. Replaces the old autostart `hl.timer(5000)` park, which
+-- raced the window's first map and could miss it on a slow boot.
+hl.window_rule({
+  name      = "minimize-proton-mail",
+  match     = { class = "^(proton-mail)$" },
+  workspace = "special:minimized silent",
 })
 
 -- Layer rules

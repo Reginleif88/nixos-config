@@ -30,7 +30,6 @@ import Quickshell.Services.UPower
 import "sidebar"
 import "network"
 import "audio"
-import "vpn"
 import "sysmon"
 import "music"
 
@@ -136,53 +135,6 @@ ShellRoot {
     property string _weatherJsonBuf: ""
     readonly property string weatherScript:
         Qt.resolvedUrl("scripts/weather.sh").toString().replace("file://", "")
-
-    // ---------------------
-    // VPN state (shared by all monitor bars)
-    // ---------------------
-    readonly property string vpnScript:
-        Qt.resolvedUrl("scripts/vpn_panel.sh").toString().replace("file://", "")
-
-    property bool vpnConnected: false
-    property string vpnServer: ""
-    property string vpnCountry: ""
-    property var vpnConnectedInfo: null
-    property var vpnProfiles: []
-    property string _vpnStatusBuf: ""
-
-    function refreshVpnStatus() {
-        if (!vpnStatusProc.running) {
-            root._vpnStatusBuf = ""
-            vpnStatusProc.running = true
-        }
-    }
-
-    Process {
-        id: vpnStatusProc
-        command: ["bash", root.vpnScript, "--status"]
-        stdout: SplitParser {
-            onRead: function(line) { root._vpnStatusBuf += line }
-        }
-        onExited: function() {
-            try {
-                var d = JSON.parse(root._vpnStatusBuf)
-                root.vpnConnectedInfo = d.connected || null
-                root.vpnConnected = d.connected !== null && d.connected !== undefined
-                root.vpnServer = root.vpnConnected ? (d.connected.name || "") : ""
-                root.vpnCountry = root.vpnConnected ? (d.connected.country || "") : ""
-                root.vpnProfiles = d.profiles || []
-            } catch(e) {}
-            root._vpnStatusBuf = ""
-        }
-    }
-
-    Timer {
-        interval: 10000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.refreshVpnStatus()
-    }
 
     // ---------------------
     // Mail (Proton Mail desktop) state
@@ -1055,54 +1007,6 @@ ShellRoot {
                         }
                     }
 
-                    // ---- VPN pill ----
-                    Pill {
-                        // Launch ProtonVPN GUI (right-click)
-                        Process {
-                            id: vpnGuiProc
-                            command: ["protonvpn-app"]
-                        }
-
-                        Text {
-                            id: vpnIcon
-                            text: "\uDB81\uDC83"  // 󰒃 nf-md-lock
-                            font.pixelSize: root.fontSize
-                            font.family: root.fontFamily
-                            color: vpnPopup.visible ? root.accentYellow
-                                 : vpnPopup.vpnConnected ? root.accentGreen
-                                 : root.mutedColor
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                onClicked: function(mouse) {
-                                    if (mouse.button === Qt.RightButton)
-                                        vpnGuiProc.running = true
-                                    else
-                                        vpnPopup.visible = !vpnPopup.visible
-                                }
-                            }
-                        }
-                        Text {
-                            visible: vpnPopup.vpnServer !== ""
-                            text: vpnPopup.vpnServer
-                            font.pixelSize: root.fontSize
-                            font.family: root.fontFamily
-                            color: root.accentGreen
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                acceptedButtons: Qt.LeftButton | Qt.RightButton
-                                onClicked: function(mouse) {
-                                    if (mouse.button === Qt.RightButton)
-                                        vpnGuiProc.running = true
-                                    else
-                                        vpnPopup.visible = !vpnPopup.visible
-                                }
-                            }
-                        }
-                    }
-
                     // ---- Mail pill (Proton Mail) ----
                     Pill {
                         Item {
@@ -1486,33 +1390,6 @@ ShellRoot {
                 accentTeal: root.accentTeal
                 fontFamily: root.fontFamily
                 fontSize: root.fontSize
-            }
-
-            // -------------------------------------------------------
-            // VPN popup (ProtonVPN status + disconnect)
-            // -------------------------------------------------------
-            VpnPopup {
-                id: vpnPopup
-                anchorWindow: bar
-                anchorItem: vpnIcon
-
-                bgColor: root.bgColor
-                fgColor: root.fgColor
-                mutedColor: root.mutedColor
-                accentGreen: root.accentGreen
-                accentYellow: root.accentYellow
-                accentRed: root.accentRed
-                accentTeal: root.accentTeal
-                fontFamily: root.fontFamily
-                fontSize: root.fontSize
-
-                vpnScript: root.vpnScript
-                sharedVpnConnected: root.vpnConnected
-                sharedVpnServer: root.vpnServer
-                sharedVpnCountry: root.vpnCountry
-                sharedConnectedInfo: root.vpnConnectedInfo
-                sharedProfiles: root.vpnProfiles
-                refreshStatus: function() { root.refreshVpnStatus() }
             }
 
             // -------------------------------------------------------

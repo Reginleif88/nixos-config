@@ -70,23 +70,26 @@ in
     };
   };
 
-  escrcpy = prev.appimageTools.wrapType2 {
-    pname = "escrcpy";
-    version = "2.6.2";
+  # escrcpy: GUI front-end for scrcpy (Android screen mirroring), distributed
+  # only as an AppImage. Single source of truth — to update, bump `version` and
+  # refresh `hash` (nix store prefetch-file <url>); the download URL and both
+  # appimageTools passes derive from them. The asset name has tracked
+  # `Escrcpy-<version>-linux-x86_64.AppImage` across releases — verify it still
+  # holds at https://github.com/viarotel-org/escrcpy/releases when bumping.
+  escrcpy = let
+    version = "2.11.1";
     src = prev.fetchurl {
-      url = "https://github.com/viarotel-org/escrcpy/releases/download/v2.6.2/Escrcpy-2.6.2-linux-x86_64.AppImage";
-      sha256 = "0mg37z9yhc5yvpf28zsr5d0m4xdm9x057s58fnvww4x7p4wclczv";
+      url = "https://github.com/viarotel-org/escrcpy/releases/download/v${version}/Escrcpy-${version}-linux-x86_64.AppImage";
+      hash = "sha256-JN+Int2G0ZnGY7XTl56pqTTdx9AX9369Ijbc+t504Pc=";
     };
-    extraInstallCommands = let
-      appimageContents = prev.appimageTools.extractType2 {
-        pname = "escrcpy";
-        version = "2.6.2";
-        src = prev.fetchurl {
-          url = "https://github.com/viarotel-org/escrcpy/releases/download/v2.6.2/Escrcpy-2.6.2-linux-x86_64.AppImage";
-          sha256 = "0mg37z9yhc5yvpf28zsr5d0m4xdm9x057s58fnvww4x7p4wclczv";
-        };
-      };
-    in ''
+    appimageContents = prev.appimageTools.extractType2 {
+      pname = "escrcpy";
+      inherit version src;
+    };
+  in prev.appimageTools.wrapType2 {
+    pname = "escrcpy";
+    inherit version src;
+    extraInstallCommands = ''
       install -m 444 -D ${appimageContents}/escrcpy.desktop $out/share/applications/escrcpy.desktop
       substituteInPlace $out/share/applications/escrcpy.desktop \
         --replace-warn 'Exec=AppRun' 'Exec=escrcpy'

@@ -22,18 +22,12 @@ hl.on("hyprland.start", function()
   hl.exec_cmd("wl-paste --type image --watch cliphist store")
   hl.exec_cmd("wl-paste --primary --type text --watch cliphist store")
   hl.exec_cmd("wl-paste --primary --type image --watch cliphist store")
-  -- hyacinth only (the command only exists there; the `command -v` guard no-ops
-  -- elsewhere): auto-open the tuned mpv when Stremio's "Copy Stream Link" lands on the
-  -- clipboard.
-  hl.exec_cmd("command -v stremio-to-mpv >/dev/null && wl-paste --type text --watch stremio-to-mpv --filter")
   hl.exec_cmd("gsettings set org.gnome.desktop.interface color-scheme 'prefer-dark'")
   hl.exec_cmd("swaync")
+  -- Proton Mail is parked on special:minimized by a window rule
+  -- (minimize-proton-mail in window_rules.lua), which fires on window.open
+  -- instead of racing a fixed timer.
   hl.exec_cmd("proton-mail")
-
-  -- Wait for the Proton Mail window to actually appear before parking it.
-  hl.timer(function()
-    hl.dispatch(hl.dsp.window.move({ workspace = "special:minimized", silent = true, window = "title:Proton Mail" }))
-  end, { timeout = 5000, type = "oneshot" })
 
   hl.timer(function()
     hl.exec_cmd("claude-desktop --tray")

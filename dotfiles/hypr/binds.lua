@@ -19,9 +19,7 @@ hl.bind(mainMod .. " + N",         hl.dsp.exec_cmd("swaync-client -t -sw"))
 hl.bind(mainMod .. " + SHIFT + N", hl.dsp.exec_cmd("swaync-client -d -sw"))
 hl.bind(mainMod .. " + SHIFT + V", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + R",         hl.dsp.exec_cmd(menu))
--- hyacinth: cast the current Stremio "Copy Stream Link" to the tuned mpv; on hosts
--- without that script, fall back to the dwindle pseudo toggle this key used to do.
-hl.bind(mainMod .. " + P",         hl.dsp.exec_cmd("if command -v stremio-to-mpv >/dev/null 2>&1; then stremio-to-mpv; else hyprctl dispatch pseudo; fi"))
+hl.bind(mainMod .. " + P",         hl.dsp.exec_cmd("hyprctl dispatch pseudo"))    -- dwindle pseudo toggle
 hl.bind(mainMod .. " + J",         hl.dsp.layout("togglesplit"))    -- dwindle
 
 -- Focus movement

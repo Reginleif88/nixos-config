@@ -1,4 +1,5 @@
 #include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/state/MonitorState.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/event/EventBus.hpp>
@@ -202,6 +203,6 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 }
 
 APICALL EXPORT void PLUGIN_EXIT() {
-    for (auto& m : g_pCompositor->m_monitors)
+    for (auto& m : State::monitorState()->monitors())
         m->m_scheduledRecalc = true;
 }

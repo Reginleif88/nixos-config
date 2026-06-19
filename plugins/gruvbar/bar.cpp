@@ -1,6 +1,7 @@
 #include "bar.hpp"
 
 #include <hyprland/src/Compositor.hpp>
+#include <hyprland/src/state/MonitorState.hpp>
 #include <hyprland/src/desktop/view/Window.hpp>
 #include <hyprland/src/render/Renderer.hpp>
 #include <hyprland/src/render/pass/RectPassElement.hpp>
@@ -391,7 +392,7 @@ bool CBar::doButtonPress(Vector2D coords) {
                     // window truly disappears regardless of which monitor.
                     if (dispatcher == "movetoworkspacesilent" && arg.starts_with("special:")) {
                         auto wsName = arg.substr(8);
-                        for (auto& m : g_pCompositor->m_monitors) {
+                        for (auto& m : State::monitorState()->monitors()) {
                             if (m->m_activeSpecialWorkspace &&
                                 m->m_activeSpecialWorkspace->m_name == "special:" + wsName) {
                                 g_pKeybindManager->m_dispatchers["togglespecialworkspace"](wsName);

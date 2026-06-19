@@ -7,5 +7,4 @@ hl.config({
 -- NOTE: misc.vrr (variable refresh rate) is intentionally NOT set here.
 -- The NVIDIA proprietary driver (Pascal/GTX 1080, 580.x) exposes no
 -- DRM `vrr_capable` connector property under Wayland, so Hyprland's VRR
--- request silently no-ops. Video cadence is handled by matching the
--- monitor refresh to content framerate in monitors.lua instead.
+-- request silently no-ops.
