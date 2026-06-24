@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, lib, isGraphical, ... }:
 
 {
   gtk = {
@@ -32,7 +32,15 @@
     };
   };
 
-  # Dark mode via dconf
+  # dconf is only usable on graphical hosts. The HM dconf module's activation
+  # step shells out to `dconf load` over the ca.desrt.dconf D-Bus service, which
+  # only exists where programs.dconf.enable is set system-side
+  # (modules/hyprland.nix). On headless hosts that service is unactivatable, so
+  # the whole step must be disabled — note the gtk + pointerCursor modules also
+  # emit dconf keys, so gating only these settings below is not enough.
+  dconf.enable = isGraphical;
+
+  # Dark mode via dconf (applied only when dconf.enable above is true).
   dconf.settings = {
     "org/gnome/desktop/interface" = {
       color-scheme = "prefer-dark";

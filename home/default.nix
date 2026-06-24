@@ -25,6 +25,12 @@ in
     ./browser.nix
   ];
 
+  # Expose the host predicates to sibling home modules (e.g. gtk.nix) so they
+  # can gate features without re-deriving the host list. dconf.settings, for
+  # instance, only works on hosts where programs.dconf is enabled system-side
+  # (the graphical ones); headless hosts have no dconf D-Bus service.
+  _module.args = { inherit isHyprland isGraphical; };
+
   home.username = "reginleif88";
   home.homeDirectory = "/home/reginleif88";
   home.stateVersion = "25.11";

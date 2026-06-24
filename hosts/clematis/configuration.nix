@@ -42,6 +42,12 @@
   networking.hostName = "clematis";
   networking.networkmanager.enable = true;
 
+  # Ignis dev server (apps/ignis-server, `npm run dev:run`) listens on 8080.
+  # The base firewall (modules/security.nix) only allows SSH + ICMP, so open
+  # 8080 here to make the browser client reachable from the LAN. Host-scoped
+  # because Ignis runs only on this VM.
+  networking.firewall.allowedTCPPorts = [ 8080 ];
+
   # VM-specific group memberships (universals come from modules/common.nix):
   # render — Mesa/GBM access to the passed-through amdgpu render node.
   users.users.reginleif88.extraGroups = [ "render" ];
