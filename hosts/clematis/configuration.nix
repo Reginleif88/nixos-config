@@ -9,6 +9,7 @@
     ../../modules/amdgpu.nix
     ../../modules/ssh-server.nix
     ../../modules/ignis.nix
+    ../../modules/code-server.nix
   ];
 
   # Bootloader: systemd-boot on UEFI/GPT (Q35 + OVMF on Proxmox).
@@ -43,19 +44,22 @@
   networking.hostName = "clematis";
   networking.networkmanager.enable = true;
 
-  # Ignis (modules/ignis.nix) listens on 8080. cloudflared does NOT run in this
-  # VM — it runs on the Proxmox HOST (192.168.1.150) and dials the origin at this
-  # VM's LAN address (192.168.1.41:8080). That traffic arrives on ens18, so it is
-  # subject to the firewall — modules/security.nix keeps the base policy SSH +
-  # ICMP only, which silently dropped the tunnel's origin dials and surfaced as a
-  # 502 Bad Gateway. Open 8080 to the Proxmox host ALONE so the tunnel reaches the
-  # origin without exposing the vault to the rest of the LAN. This appends to the
-  # iptables nixos-fw chain because clematis uses the default iptables firewall
-  # backend (no networking.nftables.enable). A broader
-  # `networking.firewall.allowedTCPPorts = [ 8080 ];` would also fix the 502, but
-  # would let ANY LAN host reach the vault directly, bypassing Cloudflare Access.
+  # Ignis (modules/ignis.nix, :8080) and code-server (modules/code-server.nix,
+  # :8081) are both origins for Cloudflare tunnels. cloudflared does NOT run in
+  # this VM — it runs on the Proxmox HOST (192.168.1.150) and dials each origin at
+  # this VM's LAN address (192.168.1.41:<port>). That traffic arrives on ens18, so
+  # it is subject to the firewall — modules/security.nix keeps the base policy SSH
+  # + ICMP only, which silently drops the tunnel's origin dials and surfaces as a
+  # 502 Bad Gateway. Open each port to the Proxmox host ALONE so the tunnels reach
+  # their origins without exposing the vault (or a code-server shell) to the rest
+  # of the LAN. These append to the iptables nixos-fw chain because clematis uses
+  # the default iptables firewall backend (no networking.nftables.enable). A
+  # broader `networking.firewall.allowedTCPPorts = [ 8080 8081 ];` would also fix
+  # the 502, but would let ANY LAN host reach the origins directly, bypassing
+  # Cloudflare Access.
   networking.firewall.extraCommands = ''
     iptables -A nixos-fw -p tcp -s 192.168.1.150 --dport 8080 -j nixos-fw-accept
+    iptables -A nixos-fw -p tcp -s 192.168.1.150 --dport 8081 -j nixos-fw-accept
   '';
 
   # VM-specific group memberships (universals come from modules/common.nix):
