@@ -21,6 +21,7 @@ let
   buildPath = lib.makeBinPath [
     pkgs.nodejs_24 # node, npm, npx
     pkgs.git
+    pkgs.gh # `git pull` auth: gh acts as the HTTPS credential helper
     pkgs.curl # setup.sh fetches the Obsidian .asar
     pkgs.gzip # gunzip
     pkgs.gnutar
@@ -30,6 +31,37 @@ let
     pkgs.gnused
     pkgs.bash
   ];
+
+  # Pull the Yggdrasil vault before (re)building so a rebuild always serves the
+  # latest notes. The remote is a PRIVATE HTTPS repo
+  # (github.com/Reginleif88/Yggdrasil), authenticated by the `gh` CLI acting as a
+  # git credential helper — it hands git the PAT stored in
+  # ~/.config/gh/hosts.yml. We pin that helper explicitly (rather than leaning on
+  # the user's mutable ~/.config/git/config) so the pull keeps working regardless
+  # of personal git config; it only needs `gh` to stay logged in. HOME must point
+  # at the user so gh finds hosts.yml, SSL_CERT_FILE supplies TLS trust, and
+  # GIT_TERMINAL_PROMPT=0 makes an expired/absent token fail fast instead of
+  # hanging the rebuild on an unanswerable prompt. Fast-forward only: the vault is
+  # served read-write, so if the working tree is dirty or has diverged the pull
+  # aborts cleanly and we keep local state rather than clobbering unsynced edits.
+  # A missing upstream or auth failure is a warning, never a hard failure.
+  pullScript = pkgs.writeShellScript "ignis-pull" ''
+    set -euo pipefail
+    export HOME=/home/${user}
+    export PATH=${buildPath}:$PATH
+    export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+    export GIT_TERMINAL_PROMPT=0
+
+    cd ${vault}
+    if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      echo "[ignis] ${vault} is not a git repo — skipping pull"
+      exit 0
+    fi
+    echo "[ignis] pulling Yggdrasil vault (ff-only)"
+    git -c credential.helper= \
+        -c credential.helper="${pkgs.gh}/bin/gh auth git-credential" \
+        pull --ff-only
+  '';
 
   # Build the current checkout as the user. Deps are reinstalled only when the
   # lockfile changed (mtime vs a stamp), so ordinary rebuilds just re-bundle.
@@ -69,6 +101,9 @@ in
     deps = [ "users" "groups" ];
     text = ''
       echo "[ignis] refreshing from ${checkout}"
+      if ! ${pkgs.util-linux}/bin/runuser -u ${user} -- ${pullScript}; then
+        echo "[ignis] vault pull failed — building from the current checkout" >&2
+      fi
       if ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}; then
         ${pkgs.systemd}/bin/systemctl restart ignis.service || true
       else
