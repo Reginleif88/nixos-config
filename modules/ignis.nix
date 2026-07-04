@@ -97,14 +97,23 @@ in
   # NOTE: this shells out to npm during activation, so a rebuild that changes the
   # lockfile (or the very first one) needs network. Plain rebuilds only re-bundle
   # (offline, a few seconds).
+  # `etc` is a dep so the new unit file is symlinked under /etc/systemd/system
+  # before we touch it; activation scripts otherwise run before switch-to-
+  # configuration writes /etc.
   system.activationScripts.ignis = {
-    deps = [ "users" "groups" ];
+    deps = [ "users" "groups" "etc" ];
     text = ''
       echo "[ignis] refreshing from ${checkout}"
       if ! ${pkgs.util-linux}/bin/runuser -u ${user} -- ${pullScript}; then
         echo "[ignis] vault pull failed — building from the current checkout" >&2
       fi
       if ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}; then
+        # Activation scripts run BEFORE switch-to-configuration's own
+        # daemon-reload, so systemd still has the previous generation's unit
+        # cached here. Reload first, otherwise this restart re-execs ignis
+        # against the OLD unit — the exact race that left a python3-less
+        # process running after python3 was first added to `path` below.
+        ${pkgs.systemd}/bin/systemctl daemon-reload
         ${pkgs.systemd}/bin/systemctl restart ignis.service || true
       else
         echo "[ignis] build failed — keeping the current instance running" >&2
