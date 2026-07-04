@@ -1,0 +1,143 @@
+{ pkgs, lib, ... }:
+
+# Ignis — browser-based Obsidian server for the Yggdrasil vault, fronted by a
+# Cloudflare Tunnel at notes.reginleif.xyz (the tunnel is managed out-of-band and
+# is intentionally NOT declared here).
+#
+# The app runs straight from the working tree inside the vault, as the login
+# user. The shipped apps/ignis-server/scripts/deploy-install.sh can't be used on
+# NixOS — it does `sudo tee /etc/systemd/system/ignis.service`, and that path is
+# a symlink into the read-only Nix store. This module is the declarative
+# equivalent of that script's unit + env + sudoers steps, plus a rebuild-time
+# refresh so `nixos-rebuild switch` always serves the latest source.
+
+let
+  user = "reginleif88";
+  group = "users";
+  vault = "/home/reginleif88/Documents/Yggdrasil";
+  checkout = "${vault}/_System/.ignis";
+
+  # Tools needed to `npm ci` / `npm run build` / one-time `npm run setup`.
+  buildPath = lib.makeBinPath [
+    pkgs.nodejs_24 # node, npm, npx
+    pkgs.git
+    pkgs.curl # setup.sh fetches the Obsidian .asar
+    pkgs.gzip # gunzip
+    pkgs.gnutar
+    pkgs.coreutils
+    pkgs.findutils
+    pkgs.gnugrep
+    pkgs.gnused
+    pkgs.bash
+  ];
+
+  # Build the current checkout as the user. Deps are reinstalled only when the
+  # lockfile changed (mtime vs a stamp), so ordinary rebuilds just re-bundle.
+  # Obsidian's assets are fetched once (skipped forever after). Chromium comes
+  # from pkgs.chromium (see the unit env), so setup runs with --no-chromium.
+  buildScript = pkgs.writeShellScript "ignis-build" ''
+    set -euo pipefail
+    cd ${checkout}
+    export HOME=/home/${user}
+    export PATH=${buildPath}:$PATH
+    export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
+
+    if [ ! -e node_modules/.ignis-stamp ] || [ package-lock.json -nt node_modules/.ignis-stamp ]; then
+      echo "[ignis] installing deps (npm ci)"
+      npm ci --no-audit --no-fund
+      touch node_modules/.ignis-stamp
+    fi
+
+    if [ ! -f obsidian-app/index.html ]; then
+      echo "[ignis] fetching Obsidian assets (one-time)"
+      npm run setup -- --no-chromium
+    fi
+
+    echo "[ignis] building bundles"
+    npm run build
+  '';
+in
+{
+  # ── Rebuild-time refresh ────────────────────────────────────────────────────
+  # Runs on every `nixos-rebuild switch` (and boot): rebuild the bundles from the
+  # vault, then restart the unit so the new build is served. On a failed build we
+  # keep the running instance up rather than restarting into a broken tree.
+  # NOTE: this shells out to npm during activation, so a rebuild that changes the
+  # lockfile (or the very first one) needs network. Plain rebuilds only re-bundle
+  # (offline, a few seconds).
+  system.activationScripts.ignis = {
+    deps = [ "users" "groups" ];
+    text = ''
+      echo "[ignis] refreshing from ${checkout}"
+      if ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}; then
+        ${pkgs.systemd}/bin/systemctl restart ignis.service || true
+      else
+        echo "[ignis] build failed — keeping the current instance running" >&2
+      fi
+    '';
+  };
+
+  # ── The service ─────────────────────────────────────────────────────────────
+  systemd.services.ignis = {
+    description = "Ignis - browser-based Obsidian server (Yggdrasil)";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+
+    environment = {
+      PORT = "8080";
+      VAULT_ROOT = "${checkout}/vaults";
+      DATA_ROOT = "${checkout}/data";
+      OBSIDIAN_ASSETS_PATH = "${checkout}/obsidian-app";
+      # The served vault contains this repo — don't index Ignis's own dirs.
+      VAULT_IGNORE_DIRS = ".ignis,obsidian-app,dev-vault";
+      # HTTPS origin for the WebSocket origin check (TLS terminates at Cloudflare).
+      WS_ORIGINS = "https://notes.reginleif.xyz";
+      # Capture plugins (periodical-archive) drive a real browser. Use the Nix
+      # chromium rather than setup.sh's prebuilt (which needs an FHS loader).
+      PUPPETEER_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
+      HOME = "/home/${user}";
+    };
+
+    # VAULT_ROOT is a directory of vault subdirs; a single symlink exposes ONLY
+    # Yggdrasil (never its ~/Documents siblings) and names the vault "Yggdrasil".
+    preStart = ''
+      mkdir -p ${checkout}/vaults ${checkout}/data
+      ln -sfn ${vault} ${checkout}/vaults/Yggdrasil
+    '';
+
+    serviceConfig = {
+      Type = "simple";
+      User = user;
+      Group = group;
+      WorkingDirectory = checkout;
+      ExecStart = "${pkgs.nodejs_24}/bin/node ${checkout}/apps/ignis-server/server/index.js";
+      Restart = "on-failure";
+      RestartSec = 5;
+
+      # Sandbox, relaxed for a $HOME checkout: home stays read-only with a single
+      # write hole for the vault (served read-write) — which also covers data/ and
+      # vaults/ since they live inside it.
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ProtectHome = "read-only";
+      ReadWritePaths = [ vault ];
+      ProtectKernelTunables = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      LockPersonality = true;
+    };
+  };
+
+  # `npm run deploy` (= sudo systemctl restart ignis) for quick iteration between
+  # full rebuilds: let the login user manage only this unit without a password.
+  security.sudo.extraRules = [{
+    users = [ user ];
+    commands = [
+      { command = "/run/current-system/sw/bin/systemctl restart ignis"; options = [ "NOPASSWD" ]; }
+      { command = "/run/current-system/sw/bin/systemctl start ignis"; options = [ "NOPASSWD" ]; }
+      { command = "/run/current-system/sw/bin/systemctl stop ignis"; options = [ "NOPASSWD" ]; }
+    ];
+  }];
+}

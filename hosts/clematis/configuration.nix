@@ -8,6 +8,7 @@
     ../../modules/login.nix
     ../../modules/amdgpu.nix
     ../../modules/ssh-server.nix
+    ../../modules/ignis.nix
   ];
 
   # Bootloader: systemd-boot on UEFI/GPT (Q35 + OVMF on Proxmox).
@@ -42,11 +43,10 @@
   networking.hostName = "clematis";
   networking.networkmanager.enable = true;
 
-  # Ignis dev server (apps/ignis-server, `npm run dev:run`) listens on 8080.
-  # The base firewall (modules/security.nix) only allows SSH + ICMP, so open
-  # 8080 here to make the browser client reachable from the LAN. Host-scoped
-  # because Ignis runs only on this VM.
-  networking.firewall.allowedTCPPorts = [ 8080 ];
+  # Ignis (modules/ignis.nix) listens on 8080, reached only via the Cloudflare
+  # Tunnel over loopback — which is never firewalled. So no LAN port is opened
+  # here; the base firewall (modules/security.nix) stays SSH + ICMP only. Add
+  # `networking.firewall.allowedTCPPorts = [ 8080 ];` back for direct LAN access.
 
   # VM-specific group memberships (universals come from modules/common.nix):
   # render — Mesa/GBM access to the passed-through amdgpu render node.
