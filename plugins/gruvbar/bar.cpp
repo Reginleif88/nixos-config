@@ -13,6 +13,8 @@
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/layout/LayoutManager.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
+#include <hyprland/src/desktop/state/ViewState.hpp>
+#include <hyprland/src/desktop/state/WindowState.hpp>
 #include <hyprland/protocols/wlr-layer-shell-unstable-v1.hpp>
 #include <pango/pangocairo.h>
 
@@ -346,12 +348,12 @@ bool CBar::isLayerSurfaceAbove() {
     Vector2D surfaceCoords;
     PHLLS    foundLS;
     for (auto layer : {ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY, ZWLR_LAYER_SHELL_V1_LAYER_TOP}) {
-        if (g_pCompositor->vectorToLayerSurface(MOUSECOORDS, &PMONITOR->m_layerSurfaceLayers[layer], &surfaceCoords, &foundLS))
+        if (Desktop::viewState()->hitTest().layerSurfaceAt(MOUSECOORDS, &PMONITOR->m_layerSurfaceLayers[layer], &surfaceCoords, &foundLS))
             return true;
     }
 
     // Check popups of layer surfaces (e.g. Quickshell AudioMixerPopup)
-    if (g_pCompositor->vectorToLayerPopupSurface(MOUSECOORDS, PMONITOR, &surfaceCoords, &foundLS))
+    if (Desktop::viewState()->hitTest().layerPopupSurfaceAt(MOUSECOORDS, PMONITOR, &surfaceCoords, &foundLS))
         return true;
 
     return false;
@@ -446,7 +448,7 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
 
     // Don't consume clicks if our window is occluded by another window
     auto MOUSECOORDS = g_pInputManager->getMouseCoordsInternal();
-    auto topWin      = g_pCompositor->vectorToWindowUnified(MOUSECOORDS, Desktop::View::RESERVED_EXTENTS | Desktop::View::ALLOW_FLOATING);
+    auto topWin      = Desktop::viewState()->hitTest().windowAt(MOUSECOORDS, Desktop::View::RESERVED_EXTENTS | Desktop::View::ALLOW_FLOATING);
     if (topWin && topWin != PWINDOW)
         return;
 
@@ -458,7 +460,7 @@ void CBar::onMouseButton(Event::SCallbackInfo& info, IPointer::SButtonEvent e) {
     if (Desktop::focusState()->window() != PWINDOW)
         Desktop::focusState()->fullWindowFocus(PWINDOW, Desktop::FOCUS_REASON_CLICK);
     if (PWINDOW->m_isFloating)
-        g_pCompositor->changeWindowZOrder(PWINDOW, true);
+        Desktop::windowState()->raise(PWINDOW);
 
     info.cancelled   = true;
     m_bCancelledDown = true;
