@@ -79,5 +79,13 @@
       "io.podman_desktop.PodmanDesktop"
       { appId = "com.nvidia.geforcenow"; origin = "GeForceNOW"; }
     ];
+
+    # Stremio's UI is a WebKitGTK web-view. Its DMABUF/GPU-compositing
+    # renderer heap-corrupts and crash-loops the WebKitWebProcess on the
+    # NVIDIA proprietary driver inside the Flatpak sandbox (frequent
+    # SIGSEGV/SIGABRT coredumps -> random freezes/crashes). Forcing the
+    # software-composite path stabilises it. Distinct from the accepted,
+    # rare nv_drm_semsurf_fence_wait_ioctl error -- see memory note.
+    overrides."com.stremio.Stremio".Environment.WEBKIT_DISABLE_DMABUF_RENDERER = "1";
   };
 }
