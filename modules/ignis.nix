@@ -84,17 +84,15 @@ in
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
 
+    # All app config lives in the vault's .env (${vault}/.env), loaded by the server
+    # at startup (apps/ignis-server/server/load-env.js) — it is the single source of
+    # truth. Only Nix-derived values remain here: they can't live in a static file.
+    #   - PUPPETEER_EXECUTABLE_PATH is a per-build Nix store path (chromium updates).
+    #   - HOME is the service account's home, needed by systemd/node.
+    # config.js already defaults PORT/VAULT_ROOT/DATA_ROOT/OBSIDIAN_ASSETS_PATH to the
+    # same values this block used to set, so they simply drop out. WS_ORIGINS and
+    # VAULT_IGNORE_DIRS now come from the .env — set them there before rebuilding.
     environment = {
-      PORT = "8080";
-      VAULT_ROOT = "${checkout}/vaults";
-      DATA_ROOT = "${checkout}/data";
-      OBSIDIAN_ASSETS_PATH = "${checkout}/obsidian-app";
-      # The served vault contains this repo — don't index Ignis's own dirs.
-      VAULT_IGNORE_DIRS = ".ignis,obsidian-app,dev-vault";
-      # HTTPS origin for the WebSocket origin check (TLS terminates at Cloudflare).
-      WS_ORIGINS = "https://notes.reginleif.xyz";
-      # Capture plugins (periodical-archive) drive a real browser. Use the Nix
-      # chromium rather than setup.sh's prebuilt (which needs an FHS loader).
       PUPPETEER_EXECUTABLE_PATH = "${pkgs.chromium}/bin/chromium";
       HOME = "/home/${user}";
     };
