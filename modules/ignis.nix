@@ -132,6 +132,16 @@ in
       HOME = "/home/${user}";
     };
 
+    # Host spawns requested by bare name (the Terminal plugin's `python3` PTY
+    # bootstrap; obsidian-git's `git`) resolve against THIS unit's PATH: the server
+    # forces its own PATH onto every child it spawns for a plugin
+    # (packages/server-core/src/host-bridge/providers/child-process.js, buildEnv).
+    # systemd's default service PATH is only coreutils/findutils/gnugrep/gnused/
+    # systemd and excludes /run/current-system/sw/bin, so a system-installed python3
+    # is invisible here. Pin what plugins spawn, store-path exact — don't lean on the
+    # mutable system profile. (node + Chromium avoid this by using absolute paths.)
+    path = [ pkgs.python3 pkgs.git ];
+
     # VAULT_ROOT is a directory of vault subdirs; a single symlink exposes ONLY
     # Yggdrasil (never its ~/Documents siblings) and names the vault "Yggdrasil".
     preStart = ''
