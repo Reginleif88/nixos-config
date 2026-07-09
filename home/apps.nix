@@ -166,4 +166,19 @@ in
     };
   };
 
+  # thunar-volman removable-media handling (the plugin is enabled system-side in
+  # modules/services.nix). These xfconf toggles are the equivalent of Thunar >
+  # Preferences > Advanced > "Configure" > Volume Management. On insert of a USB,
+  # thunar-volman asks udisks2 to mount it; for a BitLocker/LUKS volume that
+  # unlock request surfaces the gvfs password dialog first, then autobrowse opens
+  # a Thunar window on the freshly-mounted filesystem. Unlike dconf (see gtk.nix),
+  # xfconf's D-Bus service ships in the xfce.xfconf package itself, so this needs
+  # no system-side service — only that this module is on a graphical host, which
+  # apps.nix already is (imported under isGraphical in home/default.nix).
+  xfconf.settings."thunar-volman" = {
+    "automount-media/enabled" = true;  # mount removable media when inserted
+    "automount-drives/enabled" = true; # mount removable drives when hot-plugged
+    "autobrowse/enabled" = true;       # open a Thunar window after mounting
+  };
+
 }
