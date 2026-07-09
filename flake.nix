@@ -14,6 +14,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     hyprland.url = "github:hyprwm/Hyprland";
 
     dwproton.url = "github:imaviso/dwproton-flake";
@@ -81,5 +86,6 @@
       nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/hyacinth;
       nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/wisteria;
       nixosConfigurations.clematis = mkHost "clematis" ./hosts/clematis;
+      nixosConfigurations.ignis = mkHost "ignis" ./hosts/ignis;
     };
 }
