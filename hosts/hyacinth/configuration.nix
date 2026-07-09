@@ -5,6 +5,7 @@
     ../../modules/common.nix
     ../../modules/core.nix
     ../../modules/security.nix
+    ../../modules/antivirus.nix
     ../../modules/login.nix
     ../../modules/services.nix
     ../../modules/nvidia.nix
