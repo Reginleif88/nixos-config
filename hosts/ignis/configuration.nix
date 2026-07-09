@@ -67,6 +67,10 @@
   # reginleif88 log in at the OVH KVM console and authenticate sudo. The matching
   # ed25519 private key lives on hyacinth at ~/.ssh/ignis_vps.
   services.openssh.settings.PasswordAuthentication = lib.mkForce false;
+  # Also disable keyboard-interactive: with UsePAM it is PAM-backed and would
+  # otherwise keep the hashedPassword usable as an SSH credential, defeating the
+  # key-only posture. The password stays valid only at the OVH KVM console.
+  services.openssh.settings.KbdInteractiveAuthentication = lib.mkForce false;
 
   users.users.reginleif88 = {
     hashedPassword = "$6$91/azOVxsQggU/uA$PvDSgzgokcviSGzCXfjbdk5OoNDnkL3efycYO/0FsKw2GWG4ALSvkhsy4zyq9ww6LxW5f/RevzFWgKRryRhZ50";
