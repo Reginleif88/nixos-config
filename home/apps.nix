@@ -72,7 +72,34 @@ in
         --start-fullscreen \
         "$@"
     '')
+
+    # OpenWhispr: privacy-first voice-to-text dictation. AppImage packaged via
+    # appimageTools in overlays/default.nix (single source of truth for version
+    # + hash). Runs on XWayland by default; a global-hotkey/text-injection path
+    # under Hyprland may need follow-up (Wayland blocks app global shortcuts).
+    openwhispr
+    # ydotool CLI that OpenWhispr shells out to for text injection; the matching
+    # ydotoold daemon runs as the user service defined below.
+    ydotool
   ];
+
+  # ydotoold — backend that lets OpenWhispr type transcribed text into the
+  # focused window. OpenWhispr shells out to `ydotool`, which needs a running
+  # daemon on the default socket /tmp/.ydotool_socket. Its bundled auto-setup
+  # writes a user unit hardcoded to `ExecStart=/usr/bin/ydotoold` (no such path
+  # on NixOS), so we run our own against the Nix binary on that exact socket.
+  # /dev/uinput access (group `input`) + the uinput kernel module already come
+  # from modules/huion-ble.nix. Deliberately NOT programs.ydotool: that binds a
+  # different socket (/run/ydotoold/socket) and exports YDOTOOL_SOCKET, which
+  # would misdirect OpenWhispr's ydotool away from /tmp/.ydotool_socket.
+  systemd.user.services.ydotoold = lib.mkIf (hostname == "hyacinth") {
+    Unit.Description = "ydotoold - ydotool backend (OpenWhispr text injection)";
+    Install.WantedBy = [ "graphical-session.target" ];
+    Service = {
+      ExecStart = "${pkgs.ydotool}/bin/ydotoold --socket-path=/tmp/.ydotool_socket --socket-perm=0600";
+      Restart = "on-failure";
+    };
+  };
 
   # Point Playwright at Nix-managed browsers instead of downloading its own
   home.sessionVariables.PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";

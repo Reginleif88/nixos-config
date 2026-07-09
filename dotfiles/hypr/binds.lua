@@ -22,6 +22,12 @@ hl.bind(mainMod .. " + R",         hl.dsp.exec_cmd(menu))
 hl.bind(mainMod .. " + P",         hl.dsp.exec_cmd("hyprctl dispatch pseudo"))    -- dwindle pseudo toggle
 hl.bind(mainMod .. " + J",         hl.dsp.layout("togglesplit"))    -- dwindle
 
+-- OpenWhispr dictation toggle. OpenWhispr can't self-install this bind: it
+-- writes the legacy hyprland.conf (we run the 0.55 Lua config) and our config
+-- is a read-only /nix/store symlink anyway. The app exposes a session-bus
+-- Toggle() method; this is exactly the command it would have injected.
+hl.bind("CTRL + Super_L", hl.dsp.exec_cmd("dbus-send --session --type=method_call --dest=com.openwhispr.App /com/openwhispr/App com.openwhispr.App.Toggle"))
+
 -- Focus movement
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))

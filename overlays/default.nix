@@ -96,4 +96,32 @@ in
       cp -r ${appimageContents}/usr/share/icons $out/share/icons
     '';
   };
+
+  # openwhispr: privacy-first voice-to-text dictation (whisper.cpp + sherpa-onnx
+  # bundled in-app, so no runtime Python/pip needed), distributed only as an
+  # AppImage. Same single-source-of-truth shape as escrcpy above — bump `version`
+  # and refresh `hash` (nix store prefetch-file <url>) to update; the URL and both
+  # appimageTools passes derive from them. The asset name has followed
+  # `OpenWhispr-<version>-linux-x86_64.AppImage`; verify it still holds at
+  # https://github.com/OpenWhispr/openwhispr/releases when bumping.
+  openwhispr = let
+    version = "1.7.3";
+    src = prev.fetchurl {
+      url = "https://github.com/OpenWhispr/openwhispr/releases/download/v${version}/OpenWhispr-${version}-linux-x86_64.AppImage";
+      hash = "sha256-590A9noHhuHtBt0lEGBoohS8SJItOtD9xUMsDLAwa4E=";
+    };
+    appimageContents = prev.appimageTools.extractType2 {
+      pname = "openwhispr";
+      inherit version src;
+    };
+  in prev.appimageTools.wrapType2 {
+    pname = "openwhispr";
+    inherit version src;
+    extraInstallCommands = ''
+      install -m 444 -D ${appimageContents}/open-whispr.desktop $out/share/applications/open-whispr.desktop
+      substituteInPlace $out/share/applications/open-whispr.desktop \
+        --replace-warn 'Exec=AppRun' 'Exec=openwhispr'
+      cp -r ${appimageContents}/usr/share/icons $out/share/icons
+    '';
+  };
 }
