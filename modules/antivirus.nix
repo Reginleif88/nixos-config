@@ -6,13 +6,27 @@
 # nothing ever rides onto the key unnoticed.
 #
 # Because USB keys get yanked without ejecting here, any control that depends
-# on a "before you eject" step is useless. So we scan files AS THEY ARE WRITTEN
-# to removable media (ClamAV on-access / fanotify) and block infected ones.
-# Whenever the key is pulled, whatever landed on it has already been checked.
+# on a "before you eject" step — or on the user noticing an alert — is useless.
+# So we scan files AS THEY ARE WRITTEN to removable media and, on a hit, pull the
+# file straight OFF the key into quarantine. Whatever the state of the key when
+# it's yanked, a detected threat is already gone. Auto-quarantine (not just
+# alerting) is the deliberate choice for a "yank without thinking" workflow.
+#
+# NOTE ON THE WORKFLOW THIS MUST NOT BREAK: this box is also used to stage
+# PowerShell modules (e.g. DSInternals) onto the key for a W10 work PC. Those
+# are legitimate dual-use tools. ClamAV's PUA/hacktool detection is OFF by
+# default (we keep it off), so normal PSGallery modules are not flagged. And
+# quarantine is RECOVERABLE (a move, not a delete) — see the quarantine dir
+# below — so a false positive is restorable, never lost.
 #
 # Layers:
 #   1. clamav-daemon + freshclam   — signature engine (carries Windows sigs too)
-#   2. clamonacc on /run/media     — real-time scan + prevention on the USB path
+#   2. clamonacc on /run/media     — real-time scan + quarantine on the USB path.
+#                                    (The "ClamInotif could not watch" lines in
+#                                    the journal are benign: clamonacc's fanotify
+#                                    scan layer works; only its dir-tracking
+#                                    complains. Excluding the big FUSE drive below
+#                                    is what makes detection function.)
 #   3. udisks sync/flush + noexec  — immediate flush (safe yank) & no exec off keys
 #   4. weekly lynis audit          — host-side rootkit/malware/hardening check
 #                                    (we're the source of trust, so verify the PC
@@ -31,19 +45,26 @@ let
       ${pkgs.coreutils}/bin/env \
         DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/${uid}/bus \
         ${pkgs.libnotify}/bin/notify-send -u critical -a ClamAV \
-        "⚠ ClamAV blocked a threat" "$1" || true
+        "⚠ ClamAV quarantined a threat off removable media" "$1" || true
   '';
 
   # Wraps clamonacc so we can turn its detection lines into desktop toasts.
-  # Prevention itself is enforced in-kernel via fanotify regardless of this.
+  # fanotify realistically scans a written file when it is CLOSED (it is empty
+  # at open), so this is detect-on-close, not a hard block-on-write. --move
+  # therefore matters most: a detected file is pulled OFF the key into
+  # quarantine, which is the outcome we actually want (nothing rides to work).
+  # OnAccessPrevention (in clamd.conf) still blocks re-opening a known-infected
+  # file. Residual gap: yanking in the sub-second window before the close-scan
+  # completes — tiny for a human copying files by hand.
   onAccessRunner = pkgs.writeShellScript "clamonacc-runner" ''
     set -o pipefail
     ${pkgs.clamav}/bin/clamonacc --foreground --fdpass \
+      --move=/var/lib/clamav/quarantine \
       --config-file=/etc/clamav/clamd.conf 2>&1 |
     while IFS= read -r line; do
       printf '%s\n' "$line"
       case "$line" in
-        *FOUND*|*blocked*) ${notifyUser} "$line" ;;
+        *FOUND*|*moved*|*blocked*) ${notifyUser} "$line" ;;
       esac
     done
   '';
@@ -85,13 +106,18 @@ in
   };
 
   services.clamav.daemon.settings = {
-    # Watch the removable-media mount tree. Files copied onto a USB key are
-    # scanned as they are written; OnAccessPrevention denies access to any
-    # file that matches a signature, so it never fully lands on the key.
+    # Watch the removable-media mount tree so files written to a USB key are
+    # scanned (on close) and infected ones are quarantined off the key.
     OnAccessIncludePath = "/run/media";
-    OnAccessPrevention = true;
-    OnAccessExtraScanning = true;       # catch creates/moves within the tree
-    OnAccessExcludeUname = "clamav";    # don't scan our own reads (loop guard)
+    # MUST exclude large fixed / FUSE volumes mounted under /run/media:
+    # clamonacc recursively watches the include path, and trying to walk a
+    # huge NTFS/FUSE drive exhausts its watch setup and collapses the ENTIRE
+    # /run/media watch (EINVAL). fanotify also can't do permission events on
+    # FUSE at all. Add any other permanent drive that auto-mounts here.
+    OnAccessExcludePath = [ "/run/media/reginleif88/Secondary" ];
+    OnAccessPrevention = true;           # block re-open of a known-infected file
+    OnAccessExtraScanning = true;        # scan new files on create/close
+    OnAccessExcludeUname = "clamav";     # don't scan our own reads (loop guard)
     OnAccessMaxFileSize = "256M";
 
     # Authoritative detection record → journal (survives even if the desktop
@@ -103,8 +129,14 @@ in
   };
 
   # /run/media must exist at boot so clamonacc can place its fanotify mark;
-  # udisks creates the per-user subdir under it on first mount.
-  systemd.tmpfiles.rules = [ "d /run/media 0755 root root -" ];
+  # udisks creates the per-user subdir under it on first mount. The quarantine
+  # dir is where clamonacc (running as root) moves any infected file it pulls off
+  # a key. root:wheel 0750 so you can inspect/restore a false positive without
+  # sudo (a cross-device move copies+unlinks, so files land here owned by root).
+  systemd.tmpfiles.rules = [
+    "d /run/media 0755 root root -"
+    "d /var/lib/clamav/quarantine 0750 root wheel -"
+  ];
 
   # clamonacc (the fanotify client) isn't wired up by the NixOS module, so we
   # run it ourselves. It needs clamd's socket and a populated signature DB.
@@ -123,7 +155,10 @@ in
   };
 
   # On-demand scanner for keys you didn't write yourself, plus the audit tool.
-  environment.systemPackages = [ usbScan pkgs.clamav pkgs.lynis ];
+  # powershell (pwsh) is here so you can `Save-Module -Name DSInternals -Path
+  # /run/media/reginleif88/<KEY>` straight onto the key for the W10 work PC;
+  # on-access scanning checks each module file as it's written.
+  environment.systemPackages = [ usbScan pkgs.clamav pkgs.lynis pkgs.powershell ];
 
   ###########################################################################
   # 3. Removable media: flush writes immediately + refuse execution
