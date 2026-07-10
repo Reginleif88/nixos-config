@@ -1,8 +1,11 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 
 # Ignis — browser-based Obsidian server for the Yggdrasil vault, fronted by a
-# Cloudflare Tunnel at notes.reginleif.xyz (the tunnel is managed out-of-band and
-# is intentionally NOT declared here).
+# Cloudflare Tunnel at notes.reginleif.xyz. The tunnel is now declared here too
+# (see the ── Cloudflare Tunnel ── section at the bottom): a remotely-managed
+# (token-auth) tunnel whose ingress routes live in the Cloudflare dashboard, run
+# as a systemd unit — the declarative equivalent of `cloudflared service install
+# <token>`. It dials OUTBOUND only, so it needs no inbound firewall port.
 #
 # The app runs straight from the working tree inside the vault, as the login
 # user. The shipped apps/ignis-server/scripts/deploy-install.sh can't be used on
@@ -192,4 +195,58 @@ in
       { command = "/run/current-system/sw/bin/systemctl stop ignis"; options = [ "NOPASSWD" ]; }
     ];
   }];
+
+  # ── Cloudflare Tunnel ───────────────────────────────────────────────────────
+  # Fronts this box's internal services (ignis :8080, code-server :8081) at their
+  # public hostnames. This is a REMOTELY-managed tunnel: the ingress rules
+  # (hostname → localhost:port) live in the Cloudflare Zero Trust dashboard, and
+  # the box authenticates with a single connector token — the exact model of
+  # `cloudflared service install <token>`. NixOS's services.cloudflared module is
+  # for LOCALLY-managed tunnels (a credentials JSON + Nix-declared ingress) and
+  # cannot consume a token, so we run the unit ourselves.
+  #
+  # The token is a live credential, so it never enters the Nix store: it lives in
+  # secrets.yaml (key `cloudflared_tunnel_token`) and sops-nix renders it into a
+  # root-owned 0400 EnvironmentFile at activation. systemd reads that file as root
+  # (PID 1) before dropping to the DynamicUser, so the unprivileged process gets
+  # $TUNNEL_TOKEN in its env without ever being able to read the file itself.
+  # `cloudflared tunnel run` with no positional tunnel picks the tunnel up from
+  # $TUNNEL_TOKEN.
+  sops.secrets.cloudflared_tunnel_token = { };
+
+  sops.templates."cloudflared-tunnel.env".content = ''
+    TUNNEL_TOKEN=${config.sops.placeholder.cloudflared_tunnel_token}
+  '';
+
+  systemd.services.cloudflared-tunnel = {
+    description = "Cloudflare Tunnel (notes.reginleif.xyz — token auth)";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+
+    serviceConfig = {
+      Type = "simple";
+      EnvironmentFile = config.sops.templates."cloudflared-tunnel.env".path;
+      # --no-autoupdate is mandatory on NixOS: the binary is a read-only store
+      # path, so cloudflared's self-updater can only fail. Updates come from
+      # bumping pkgs.cloudflared and rebuilding.
+      ExecStart = "${pkgs.cloudflared}/bin/cloudflared tunnel --no-autoupdate --loglevel info run";
+      Restart = "on-failure";
+      RestartSec = 5;
+
+      # Pure outbound dialer: no privileges, no persistent state, no filesystem
+      # writes needed. Runs as a throwaway DynamicUser and is boxed in tightly.
+      DynamicUser = true;
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectSystem = "strict";
+      ProtectHome = true;
+      ProtectKernelTunables = true;
+      ProtectKernelModules = true;
+      ProtectControlGroups = true;
+      RestrictSUIDSGID = true;
+      RestrictNamespaces = true;
+      LockPersonality = true;
+    };
+  };
 }
