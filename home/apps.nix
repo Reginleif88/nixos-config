@@ -31,6 +31,65 @@ in
     kdePackages.okular
     ghidra
     gtasks
+
+    # ── RDP: Remmina GUI + tuned `rdp` CLI, one shared engine ──────────
+    # Remmina and the `rdp` wrapper below both drive ONE library
+    # (libfreerdp 3.x); Remmina's RDP support is remmina-plugin-rdp.so, a
+    # GUI over the very same engine sdl-freerdp uses. So: `remmina` for a
+    # saved-connection manager, `rdp <host>` for a one-shot session with
+    # every performance flag already baked in.
+    remmina
+    freerdp
+
+    # `rdp <host> [user] [extra freerdp flags…]`
+    #
+    # Binary: sdl-freerdp — FreeRDP's actively-developed reference GUI
+    # client (GPU-accelerated SDL_Renderer blit, best clipboard/multimon/
+    # dialog handling, native Wayland). Preferred over wlfreerdp (now
+    # maintenance-only) and xfreerdp (X11-only → XWayland).
+    #
+    # Flags, by purpose:
+    #   /gfx:AVC444          GFX pipeline w/ H.264 4:4:4 — the single biggest
+    #                        win. Ships the desktop as a video codec stream
+    #                        instead of legacy bitmap orders → smooth scroll/
+    #                        video + crisp text. Auto-negotiates down to
+    #                        AVC420/RFX if the server (needs Win8+/2012+)
+    #                        can't do 4:4:4.
+    #   /gdi:hw              hardware-accelerated GDI rendering (pairs w/ GFX).
+    #   /network:auto        probe RTT/bandwidth, self-tune codec+compression.
+    #   +dynamic-resolution  remote desktop resizes to follow the SDL window.
+    #   +auto-reconnect      ride out brief network drops.
+    #   /clipboard           bidirectional clipboard redirection.
+    #   /sound:sys:pulse     audio out via PipeWire's Pulse shim.
+    #   /cert:tofu           trust-on-first-use cert pinning (prompts once,
+    #                        remembers) — sane default for self-signed hosts.
+    #
+    # Decode is SOFTWARE (libavcodec), and that is the CORRECT path here: it
+    # is CPU H.264, NOT the NVIDIA VA-API route Chromium can't use on this
+    # Pascal box — and a GTX 1080 decodes 1080p RDP without noticing.
+    #
+    # If the SDL Wayland backend ever stalls on NVIDIA (cf. moonlight, pinned
+    # to x11 above), prepend:  SDL_VIDEODRIVER=x11 rdp <host>  (→ XWayland;
+    # RDP is a light 2D blit so the cost is negligible).
+    #
+    # Extra flags pass through, e.g.:
+    #   rdp host user /f /multimon /drive:home,/home/reginleif88
+    (pkgs.writeShellScriptBin "rdp" ''
+      host="''${1:?usage: rdp <host> [user] [extra freerdp flags]}"; shift
+      user_arg=""
+      case "''${1:-}" in
+        ""|/*|+*|-*) ;;                       # no user, or next arg is a flag
+        *) user_arg="/u:''${1}"; shift ;;     # bare word → username
+      esac
+      exec ${pkgs.freerdp}/bin/sdl-freerdp \
+        /v:"''${host}" ''${user_arg} \
+        /gfx:AVC444 /gdi:hw \
+        /network:auto \
+        +dynamic-resolution +auto-reconnect \
+        /clipboard /sound:sys:pulse \
+        /cert:tofu \
+        "''$@"
+    '')
   ]
   ++ lib.optionals (hostname == "hyacinth") [
     (pkgs.symlinkJoin {
