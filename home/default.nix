@@ -1,4 +1,10 @@
-{ config, pkgs, inputs, hostname, lib, ... }:
+{
+  pkgs,
+  inputs,
+  hostname,
+  lib,
+  ...
+}:
 
 let
   # Hosts running the Hyprland Wayland compositor (gets hyprland + quickshell).
@@ -10,16 +16,20 @@ let
 in
 {
   imports = [
-    inputs.claude-desktop.homeManagerModules.default
     ./shell.nix
     ./git.nix
+  ]
+  ++ lib.optionals isGraphical [
+    inputs.claude-desktop.homeManagerModules.default
     ./ai.nix
     ./kitty.nix
     ./gtk.nix
-  ] ++ lib.optionals isHyprland [
+  ]
+  ++ lib.optionals isHyprland [
     ./hyprland.nix
     ./quickshell.nix
-  ] ++ lib.optionals isGraphical [
+  ]
+  ++ lib.optionals isGraphical [
     ./apps.nix
     ./browser.nix
   ];
@@ -34,7 +44,7 @@ in
   home.homeDirectory = "/home/reginleif88";
   home.stateVersion = "25.11";
 
-  home.pointerCursor = {
+  home.pointerCursor = lib.mkIf isGraphical {
     enable = true;
     name = "Bibata-Modern-Classic";
     package = pkgs.bibata-cursors;

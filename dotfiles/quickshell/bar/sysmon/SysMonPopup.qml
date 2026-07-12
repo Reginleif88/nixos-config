@@ -44,15 +44,12 @@ PopupWindow {
     property var ramProcs: []
     property string _buf: ""
 
-    readonly property string scriptsDir:
-        Qt.resolvedUrl("../scripts/").toString().replace("file://", "")
-
     // ─────────────────────────────────────────────────────
     // Status polling
     // ─────────────────────────────────────────────────────
     Process {
         id: sysmonProc
-        command: ["bash", popup.scriptsDir + "sysmon_panel.sh", "--status"]
+        command: ["quickshell-sysmon", "--status"]
         stdout: SplitParser {
             onRead: function(line) { popup._buf += line }
         }

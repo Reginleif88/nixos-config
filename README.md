@@ -1,144 +1,89 @@
-<div align="center">
-
 # nixos-config
 
-Personal NixOS system configuration for a Hyprland desktop, managed with Nix Flakes and Home Manager.
+Personal NixOS configuration managed with flakes and Home Manager. The active
+hosts are a Hyprland desktop (`hyacinth`) and an OVH KVM VPS (`ignis`).
 
-![NixOS](https://img.shields.io/badge/NixOS-5277C3?style=flat&logo=nixos&logoColor=white)
-![Hyprland](https://img.shields.io/badge/Hyprland-58E1FF?style=flat&logo=hyprland&logoColor=black)
-![Wayland](https://img.shields.io/badge/Wayland-FFBC00?style=flat&logo=wayland&logoColor=black)
-![Home Manager](https://img.shields.io/badge/Home_Manager-5277C3?style=flat&logoColor=white)
-![Flakes](https://img.shields.io/badge/Flakes-5277C3?style=flat&logoColor=white)
+## Hosts
 
-Gruvbox Dark themed, multi-host (desktop, ThinkPad, and remote VM)
+`hyacinth` owns the graphical stack: Hyprland, Quickshell, Gruvbar, Flatpak,
+desktop applications, Docker-based Windows, and the host-specific hardware
+configuration.
 
-</div>
+`ignis` is a headless public server. It uses disko for its legacy-BIOS GPT
+layout, SSH, Ignis, code-server on loopback, and an outbound Cloudflare Tunnel.
+The public firewall exposes SSH only.
 
----
+## Install
 
-## What's Included
+Install NixOS with flakes enabled, then clone the repository:
 
-| Category | Tools |
-|---|---|
-| Window Manager | Hyprland, Gruvbar (custom titlebar plugin) |
-| Status Bar | Quickshell (custom QML bar) |
-| Terminal | Kitty |
-| Shell | Zsh, Oh My Zsh, Starship |
-| App Launcher | Fuzzel |
-| Notifications | SwayNC |
-| Clipboard | cliphist |
-| Screenshots | grimblast |
-| File Manager | Thunar |
-| Image Viewer | swayimg |
-| Browsers | Zen Browser, Google Chrome |
-| Knowledge | Obsidian |
-| Media | Spotify (Flatpak), Stremio (Flatpak), VLC |
-| Privacy | ProtonVPN, ProtonMail Desktop |
-| Development | VS Code, Claude Code, Gemini CLI, Node.js, Bun, direnv |
-| Containers | Docker, Podman |
-| Virtualisation | KVM / QEMU, libvirt, virt-manager |
-| Android | scrcpy, escrcpy, Winboat |
-| Gaming | Steam, DawnProton, GameScope, GeForce NOW |
-| GPU | NVIDIA with suspend/hibernate and VRAM preservation; PRIME offload (ThinkPad) |
-| Power & Hardware | TLP, thermald, fprintd, fwupd (ThinkPad) |
-| Secrets | sops-nix with age encryption |
-| Theme | Gruvbox Material Dark |
-| Kernel | CachyOS BORE (sched-ext, BBRv3, x86-64-v3) |
-| CI/CD | GitHub Actions (automated flake updates) |
-
----
-
-## Repository Structure
-
-```
-nixos-config/
-├── flake.nix                       # Flake inputs and system config
-├── flake.lock
-├── .github/
-│   └── workflows/
-│       └── flake-update.yml        # Automated daily flake.lock updates
-├── hosts/
-│   ├── hyacinth/
-│   │   ├── default.nix             # Host entry point
-│   │   ├── configuration.nix       # Desktop system config
-│   │   └── hardware-configuration.nix
-│   └── ignis/
-│       ├── default.nix             # Host entry point
-│       ├── configuration.nix       # VPS system config
-│       └── hardware-configuration.nix
-├── archive/                         # Decommissioned host configurations
-├── modules/
-│   ├── core.nix                    # Base packages, fonts, Flatpak
-│   ├── hyprland.nix                # Compositor and desktop components
-│   ├── nvidia.nix                  # GPU drivers, modesetting, VRAM
-│   ├── nvidia-prime.nix            # PRIME offload, fine-grained power mgmt
-│   ├── amdgpu.nix                  # AMD GPU stack for VM passthrough
-│   ├── gaming.nix                  # Steam, Proton, GameScope
-│   ├── virtualisation.nix          # KVM, Docker, Podman
-│   ├── services.nix                # PipeWire, Bluetooth, Thunar, Flatpak
-│   ├── security.nix                # GNOME Keyring, sops-nix
-│   ├── wayvnc.nix                  # Headless Hyprland + noVNC bridge
-│   └── login.nix                   # Auto-login TTY
-├── home/
-│   ├── default.nix                 # Home Manager entry point
-│   ├── shell.nix                   # Zsh, Starship prompt
-│   ├── kitty.nix                   # Terminal config
-│   ├── hyprland.nix                # Hyprland dotfile deployment
-│   ├── quickshell.nix              # Status bar, SwayNC, Fuzzel
-│   ├── gtk.nix                     # GTK theming, fonts, cursors
-│   ├── apps.nix                    # Desktop apps, VS Code, MIME types
-│   ├── browser.nix                 # Zen Browser + user.js deployment
-│   ├── ai.nix                      # Claude Code, Gemini CLI, Bun
-│   └── git.nix                     # Git identity, GitHub CLI
-├── plugins/
-│   └── gruvbar/                    # Custom Hyprland titlebar plugin (C++)
-├── dotfiles/
-│   ├── claude/                     # Claude Code settings
-│   ├── fuzzel/                     # App launcher config
-│   ├── hypr/                       # Hyprland configs (deployed via home.file)
-│   │   └── hosts/hyacinth/          # Per-host env, monitors, workspaces, settings
-│   ├── quickshell/bar/             # Quickshell QML bar + scripts
-│   ├── swaync/                     # Notification center config and theme
-│   └── zen-browser/                # Zen Browser user.js and policies.json
-├── secrets/
-│   ├── .sops.yaml                  # sops-nix config
-│   ├── keys.txt.age                # Passphrase-protected age private key
-│   └── secrets.yaml                # Encrypted secrets (age)
-├── overlays/
-│   └── default.nix                 # Custom overlays
-└── scripts/                        # Utility scripts
-```
-
----
-
-## Prerequisites
-
-- **NixOS** with flakes enabled
-
----
-
-## Installation
-
-After a fresh NixOS install and first reboot:
-
-```bash
+```sh
 nix-shell -p git sops age
 git clone https://github.com/Reginleif88/nixos-config.git ~/Documents/nixos-config
 cd ~/Documents/nixos-config
-
-./scripts/target-setup.sh hyacinth # or ignis
-sudo nixos-rebuild switch --flake .#hyacinth  # or .#ignis
 ```
 
-The `target-setup.sh` script handles:
+For an existing desktop installation, create or decrypt the user SOPS key and
+initialize the encrypted secrets:
 
-1. Decrypting the age key from `secrets/keys.txt.age` (you'll be prompted for the passphrase)
-2. Encrypting secrets with sops (first time only, skipped if already encrypted in repo)
+```sh
+./scripts/target-setup.sh hyacinth
+sudo nixos-rebuild switch --flake .#hyacinth
+```
 
-The age private key and encrypted secrets are both stored in the repo — the key is passphrase-protected, so you just need to remember one passphrase.
+For `ignis`, disko and `nixos-anywhere` install the server. The host expects
+the age key at `/var/lib/sops-nix/keys.txt`, so decrypt the passphrase-protected
+key into an extra-files tree before deployment:
 
----
+```sh
+install -d -m 700 /tmp/ignis-extra/var/lib/sops-nix
+age -d -o /tmp/ignis-extra/var/lib/sops-nix/keys.txt secrets/keys.txt.age
+chmod 600 /tmp/ignis-extra/var/lib/sops-nix/keys.txt
+nixos-anywhere --flake .#ignis --extra-files /tmp/ignis-extra root@IGNIS_HOST
+```
 
-## License
+The `ignis` disk identifier is declared in `hosts/ignis/disko.nix`; verify it
+matches the target before installing. After changing encrypted values, run
+`sops edit secrets/secrets.yaml` and rebuild the relevant host.
 
-[MIT](LICENSE)
+## Ownership
+
+Home Manager owns the Hyprland Lua entry point, module ordering, Gruvbar plugin,
+graphical-session user services, lock/idle configuration, and Quickshell files.
+The Quickshell WebEngine sidebar is created only on workspace 1's monitor and
+only while workspace 1 is active. Its temporary compatibility patch is kept in
+`home/quickshell.nix` and should be removed when upstream Quickshell PR #351 is
+merged.
+
+The Windows container and its RDP client are manual lifecycle services:
+
+```sh
+sudo systemctl start docker-windows
+systemctl --user start windows-desktop
+systemctl --user stop windows-desktop
+sudo systemctl stop docker-windows
+```
+
+The container is intentionally not configured to auto-start.
+
+## Secrets and recovery
+
+Keep the age key private. `scripts/target-setup.sh` refuses symlinks, creates
+the key directory as `0700`, writes the key as `0600`, and validates the final
+mode. If the graphical session fails, switch to a TTY, keep the previous NixOS
+generation available, and use `sudo nixos-rebuild switch --rollback` or boot a
+known-good generation before changing multiple graphics variables at once.
+
+## Validation and updates
+
+```sh
+nix fmt
+nix flake check --no-build --show-trace
+statix check .
+deadnix --fail .
+shellcheck scripts/*.sh dotfiles/quickshell/bar/scripts/*.sh
+```
+
+Update inputs deliberately with `nix flake update`, then rerun the validation
+commands and test the host before committing `flake.lock`. State versions are
+compatibility settings and should not be changed during ordinary updates.

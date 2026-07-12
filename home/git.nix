@@ -1,4 +1,7 @@
-{ config, pkgs, lib, ... }:
+{
+  isGraphical,
+  ...
+}:
 
 {
   programs.git = {
@@ -11,7 +14,7 @@
   };
 
   programs.gh = {
-    enable = true;
+    enable = isGraphical;
   };
 
 }

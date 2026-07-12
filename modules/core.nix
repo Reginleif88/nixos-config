@@ -8,7 +8,6 @@
     wget
     htop
     vim
-    python3
     xdg-user-dirs
     tmux
     unzip
@@ -16,76 +15,5 @@
     ripgrep
     jq
     cpio
-    pciutils    # lspci for hardware inspection
-    usbutils    # lsusb companion
-    cmake
-    ffmpeg
-    gst_all_1.gst-plugins-base
-    gst_all_1.gst-plugins-good
-    gst_all_1.gst-plugins-bad
-    gst_all_1.gst-plugins-ugly
-    gst_all_1.gst-libav
-    ntfs3g
-    pandoc
-    texliveFull
   ];
-
-  # NTFS support for mounting secondary drives
-  boot.supportedFilesystems = [ "ntfs" ];
-
-  # Fonts
-  fonts.packages = with pkgs; [
-    nerd-fonts.fira-code
-    atkinson-hyperlegible
-  ];
-
-  # Set Atkinson Hyperlegible as default system font
-  fonts.fontconfig.defaultFonts = {
-    sansSerif = [ "Atkinson Hyperlegible" ];
-    serif = [ "Atkinson Hyperlegible" ];
-    monospace = [ "FiraCode Nerd Font" ];
-  };
-
-  # nix-ld: run unpatched binaries
-  programs.nix-ld.enable = true;
-
-  # PlatformIO udev rules for Arduino/ESP32 board access
-  services.udev.packages = [ pkgs.platformio-core ];
-
-  # Flatpak with declarative package management via nix-flatpak
-  services.flatpak = {
-    enable = true;
-    update.onActivation = true;
-    update.auto = {
-      enable = true;
-      onCalendar = "weekly";
-    };
-
-    remotes = [
-      {
-        name = "flathub";
-        location = "https://dl.flathub.org/repo/flathub.flatpakrepo";
-      }
-      {
-        name = "GeForceNOW";
-        location = "https://international.download.nvidia.com/GFNLinux/flatpak/geforcenow.flatpakrepo";
-      }
-    ];
-
-    packages = [
-      "com.spotify.Client"
-      "me.proton.Mail"
-      "com.stremio.Stremio"
-      "io.podman_desktop.PodmanDesktop"
-      { appId = "com.nvidia.geforcenow"; origin = "GeForceNOW"; }
-    ];
-
-    # Stremio's UI is a WebKitGTK web-view. Its DMABUF/GPU-compositing
-    # renderer heap-corrupts and crash-loops the WebKitWebProcess on the
-    # NVIDIA proprietary driver inside the Flatpak sandbox (frequent
-    # SIGSEGV/SIGABRT coredumps -> random freezes/crashes). Forcing the
-    # software-composite path stabilises it. Distinct from the accepted,
-    # rare nv_drm_semsurf_fence_wait_ioctl error -- see memory note.
-    overrides."com.stremio.Stremio".Environment.WEBKIT_DISABLE_DMABUF_RENDERER = "1";
-  };
 }

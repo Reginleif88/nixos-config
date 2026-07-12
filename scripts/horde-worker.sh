@@ -20,7 +20,6 @@ set -euo pipefail
 
 HORDE_DIR="${HORDE_DIR:-$HOME/.cache/horde-worker-reGen}"
 HORDE_REF="${HORDE_REF:-v9.0.7}"
-WORKER_NAME="${HORDE_WORKER_NAME:-hyacinth-dreamer}"
 DO_UPDATE=0
 DO_RESET=0
 for arg in "$@"; do
@@ -52,7 +51,11 @@ cd "$HORDE_DIR"
 # 2.9.1 install built off main).
 if [[ $DO_RESET -eq 1 && -d "$HORDE_DIR/conda" ]]; then
   echo "    → --reset: removing $HORDE_DIR/conda"
-  rm -rf "$HORDE_DIR/conda" "$HORDE_DIR/bin"
+  for path in "$HORDE_DIR/conda" "$HORDE_DIR/bin"; do
+    if [[ -e "$path" ]]; then
+      rm -rf -- "$path"
+    fi
+  done
 fi
 
 # ── Seed bridgeData.yaml on first run ─────────────────────────────────

@@ -4,6 +4,7 @@
 #include <hyprland/src/render/Texture.hpp>
 #include <hyprland/src/event/EventBus.hpp>
 #include <hyprland/src/devices/IPointer.hpp>
+#include <chrono>
 #include "globals.hpp"
 
 class CBar : public IHyprWindowDecoration {
@@ -25,6 +26,7 @@ class CBar : public IHyprWindowDecoration {
     PHLWINDOWREF getOwner() { return m_pWindow; }
     WP<CBar>     m_self;
     bool         m_bButtonsDirty = true;
+    bool         m_bTextDirty = true;
 
   private:
     PHLWINDOWREF   m_pWindow;
@@ -35,6 +37,7 @@ class CBar : public IHyprWindowDecoration {
     SP<Render::ITexture> m_pTextTex;
     SP<Render::ITexture> m_pButtonsTex;
     std::string    m_szLastTitle;
+    std::chrono::steady_clock::time_point m_tpLastTextRender{};
 
     // Input state
     bool m_bDragging    = false;

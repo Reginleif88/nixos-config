@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 # Ignis — browser-based Obsidian server for the Yggdrasil vault, fronted by a
 # Cloudflare Tunnel at notes.reginleif.xyz. The tunnel is now declared here too
@@ -7,12 +12,9 @@
 # as a systemd unit — the declarative equivalent of `cloudflared service install
 # <token>`. It dials OUTBOUND only, so it needs no inbound firewall port.
 #
-# The app runs straight from the working tree inside the vault, as the login
-# user. The shipped apps/ignis-server/scripts/deploy-install.sh can't be used on
-# NixOS — it does `sudo tee /etc/systemd/system/ignis.service`, and that path is
-# a symlink into the read-only Nix store. This module is the declarative
-# equivalent of that script's unit + env + sudoers steps, plus a rebuild-time
-# refresh so `nixos-rebuild switch` always serves the latest source.
+# The app runs from the working tree inside the vault, as the login user. NixOS
+# owns the service definition; source refreshes and npm builds are explicit
+# deployment services rather than side effects of `nixos-rebuild`.
 
 let
   user = "reginleif88";
@@ -66,10 +68,9 @@ let
         pull --ff-only
   '';
 
-  # Build the current checkout as the user. Deps are reinstalled only when the
-  # lockfile changed (mtime vs a stamp), so ordinary rebuilds just re-bundle.
-  # Obsidian's assets are fetched once (skipped forever after). Chromium comes
-  # from pkgs.chromium (see the unit env), so setup runs with --no-chromium.
+  # Build the current checkout as the user. npm ci follows the committed lockfile
+  # on every explicit deployment, while Obsidian's downloaded assets remain a
+  # one-time application artifact. Chromium comes from pkgs.chromium.
   buildScript = pkgs.writeShellScript "ignis-build" ''
     set -euo pipefail
     cd ${checkout}
@@ -77,11 +78,8 @@ let
     export PATH=${buildPath}:$PATH
     export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
-    if [ ! -e node_modules/.ignis-stamp ] || [ package-lock.json -nt node_modules/.ignis-stamp ]; then
-      echo "[ignis] installing deps (npm ci)"
-      npm ci --no-audit --no-fund
-      touch node_modules/.ignis-stamp
-    fi
+    echo "[ignis] installing deps from package-lock.json"
+    npm ci --no-audit --no-fund
 
     if [ ! -f obsidian-app/index.html ]; then
       echo "[ignis] fetching Obsidian assets (one-time)"
@@ -93,35 +91,33 @@ let
   '';
 in
 {
-  # ── Rebuild-time refresh ────────────────────────────────────────────────────
-  # Runs on every `nixos-rebuild switch` (and boot): rebuild the bundles from the
-  # vault, then restart the unit so the new build is served. On a failed build we
-  # keep the running instance up rather than restarting into a broken tree.
-  # NOTE: this shells out to npm during activation, so a rebuild that changes the
-  # lockfile (or the very first one) needs network. Plain rebuilds only re-bundle
-  # (offline, a few seconds).
-  # `etc` is a dep so the new unit file is symlinked under /etc/systemd/system
-  # before we touch it; activation scripts otherwise run before switch-to-
-  # configuration writes /etc.
-  system.activationScripts.ignis = {
-    deps = [ "users" "groups" "etc" ];
-    text = ''
-      echo "[ignis] refreshing from ${checkout}"
-      if ! ${pkgs.util-linux}/bin/runuser -u ${user} -- ${pullScript}; then
-        echo "[ignis] vault pull failed — building from the current checkout" >&2
-      fi
-      if ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}; then
-        # Activation scripts run BEFORE switch-to-configuration's own
-        # daemon-reload, so systemd still has the previous generation's unit
-        # cached here. Reload first, otherwise this restart re-execs ignis
-        # against the OLD unit — the exact race that left a python3-less
-        # process running after python3 was first added to `path` below.
-        ${pkgs.systemd}/bin/systemctl daemon-reload
-        ${pkgs.systemd}/bin/systemctl restart ignis.service || true
-      else
-        echo "[ignis] build failed — keeping the current instance running" >&2
-      fi
-    '';
+  # Deployment is explicit and observable. A normal NixOS switch never reaches
+  # into the user's checkout, pulls network state, or runs npm.
+  systemd.services.ignis-build = {
+    description = "Build Ignis from the checked-out Yggdrasil source";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = user;
+      Group = group;
+      ExecStart = buildScript;
+    };
+  };
+
+  systemd.services.ignis-refresh = {
+    description = "Pull and build the Ignis Yggdrasil checkout";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "ignis-refresh" ''
+        set -euo pipefail
+        ${pkgs.util-linux}/bin/runuser -u ${user} -- ${pullScript}
+        ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}
+        ${pkgs.systemd}/bin/systemctl restart ignis.service
+      '';
+    };
   };
 
   # ── The service ─────────────────────────────────────────────────────────────
@@ -152,7 +148,10 @@ in
     # systemd and excludes /run/current-system/sw/bin, so a system-installed python3
     # is invisible here. Pin what plugins spawn, store-path exact — don't lean on the
     # mutable system profile. (node + Chromium avoid this by using absolute paths.)
-    path = [ pkgs.python3 pkgs.git ];
+    path = [
+      pkgs.python3
+      pkgs.git
+    ];
 
     # VAULT_ROOT is a directory of vault subdirs; a single symlink exposes ONLY
     # Yggdrasil (never its ~/Documents siblings) and names the vault "Yggdrasil".
@@ -185,16 +184,35 @@ in
     };
   };
 
-  # `npm run deploy` (= sudo systemctl restart ignis) for quick iteration between
-  # full rebuilds: let the login user manage only this unit without a password.
-  security.sudo.extraRules = [{
-    users = [ user ];
-    commands = [
-      { command = "/run/current-system/sw/bin/systemctl restart ignis"; options = [ "NOPASSWD" ]; }
-      { command = "/run/current-system/sw/bin/systemctl start ignis"; options = [ "NOPASSWD" ]; }
-      { command = "/run/current-system/sw/bin/systemctl stop ignis"; options = [ "NOPASSWD" ]; }
-    ];
-  }];
+  # Let the login user run an explicit deployment or restart the already-built
+  # service without granting general systemd control.
+  security.sudo.extraRules = [
+    {
+      users = [ user ];
+      commands = [
+        {
+          command = "/run/current-system/sw/bin/systemctl restart ignis";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/systemctl start ignis";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/systemctl stop ignis";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/systemctl start ignis-build";
+          options = [ "NOPASSWD" ];
+        }
+        {
+          command = "/run/current-system/sw/bin/systemctl start ignis-refresh";
+          options = [ "NOPASSWD" ];
+        }
+      ];
+    }
+  ];
 
   # ── Cloudflare Tunnel ───────────────────────────────────────────────────────
   # Fronts this box's internal services (ignis :8080, code-server :8081) at their

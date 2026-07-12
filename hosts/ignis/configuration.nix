@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ config, lib, ... }:
 
 # `ignis` — the Yggdrasil Obsidian server (modules/ignis.nix) running on a public
 # OVH KVM VPS. Adapted from hosts/clematis (the Proxmox VM that first ran Ignis).
@@ -37,43 +37,21 @@
     efiSupport = false;
   };
 
-  # mitigations=off bypasses Spectre/Meltdown/etc. workarounds, reclaiming
-  # ~5-15% CPU. Acceptable here because this is a single-tenant VM running only
-  # trusted workloads — inherited from clematis. (No serial console line: the
-  # OVH KVM console is graphical, and serial was Proxmox-specific.)
-  boot.kernelParams = [ "mitigations=off" ];
-
-  # Pin CPU at max clock — eliminates frequency-scaling latency spikes on bursty
-  # compute (npm/chromium builds during rebuilds).
-  powerManagement.cpuFreqGovernor = "performance";
-
   # zram swap: the box has 7.6 GiB RAM and no disk swap partition (disko keeps the
   # layout minimal). A compressed RAM swap gives headroom for the Ignis build
   # (npm ci + chromium fetch) without carving disk.
   zramSwap.enable = true;
+  nix.gc.options = "--delete-older-than 14d";
 
   # ── Networking ────────────────────────────────────────────────────────────
   networking.hostName = "ignis";
   networking.networkmanager.enable = true; # ens3 gets its address via DHCP
 
-  # Public firewall: SSH (from ssh-server.nix) + 443 only. Everything else,
-  # including the Ignis/code-server origins, stays closed to the internet and is
-  # exposed only through the out-of-band Cloudflare Tunnel.
-  networking.firewall.allowedTCPPorts = [ 443 ];
-
-  # ── Access (no autologin — SSH key-only, password as console fallback) ──────
-  # PasswordAuthentication is forced off (ssh-server.nix defaults it on): the box
-  # is on the public internet, so SSH is key-only. The hashedPassword still lets
-  # reginleif88 log in at the OVH KVM console and authenticate sudo. The matching
-  # ed25519 private key lives on hyacinth at ~/.ssh/ignis_vps.
-  services.openssh.settings.PasswordAuthentication = lib.mkForce false;
-  # Also disable keyboard-interactive: with UsePAM it is PAM-backed and would
-  # otherwise keep the hashedPassword usable as an SSH credential, defeating the
-  # key-only posture. The password stays valid only at the OVH KVM console.
-  services.openssh.settings.KbdInteractiveAuthentication = lib.mkForce false;
+  # The public firewall exposes SSH only. Cloudflare Tunnel dials local origins
+  # outbound, so no web port is opened here.
 
   users.users.reginleif88 = {
-    hashedPassword = "$6$91/azOVxsQggU/uA$PvDSgzgokcviSGzCXfjbdk5OoNDnkL3efycYO/0FsKw2GWG4ALSvkhsy4zyq9ww6LxW5f/RevzFWgKRryRhZ50";
+    hashedPasswordFile = config.sops.secrets.ignis_password_hash.path;
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAICKaOT9ISVrvhVHqAJ2vUg9KwCWZR5wJGGEJNngUdx51 reginleif88@ignis-vps"
     ];
@@ -86,13 +64,8 @@
   # as root at boot from either path.
   sops.age.keyFile = lib.mkForce "/var/lib/sops-nix/keys.txt";
 
-  # core.nix enables services.flatpak, which asserts xdg.portal.enable. This box
-  # is headless (no compositor), so stand up a minimal portal + gtk backend purely
-  # to satisfy that assertion — same headless shim clematis uses.
-  xdg.portal = {
-    enable = true;
-    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-    config.common.default = [ "gtk" ];
+  sops.secrets.ignis_password_hash = {
+    neededForUsers = true;
   };
 
   system.stateVersion = "25.11";

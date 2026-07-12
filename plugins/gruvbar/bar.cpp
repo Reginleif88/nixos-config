@@ -112,12 +112,27 @@ void CBar::updateWindow(PHLWINDOW pWindow) {
         return;
 
     const bool titleChanged = PWINDOW->m_title != m_szLastTitle;
-    if (titleChanged)
+    if (titleChanged) {
         m_szLastTitle = PWINDOW->m_title;
+        m_bTextDirty = true;
+    }
 
-    // Recreate title texture when needed
-    if (cfg.titleEnabled->value() && (titleChanged || m_bWindowSizeChanged || !m_pTextTex))
-        renderBarTitle(bufferSize, scale);
+    // Rebuild title textures on config changes, resize, and title changes, but
+    // avoid a Cairo/Pango upload for every progress-style title update.
+    if (cfg.titleEnabled->value()) {
+        const auto now = std::chrono::steady_clock::now();
+        const bool firstRender = m_tpLastTextRender.time_since_epoch().count() == 0;
+        const bool rateLimitExpired = firstRender
+            || std::chrono::duration_cast<std::chrono::milliseconds>(now - m_tpLastTextRender).count() >= 50;
+        if (m_bTextDirty && (rateLimitExpired || m_bWindowSizeChanged || !m_pTextTex)) {
+            renderBarTitle(bufferSize, scale);
+            m_tpLastTextRender = now;
+            m_bTextDirty = false;
+        }
+    } else {
+        m_pTextTex.reset();
+        m_bTextDirty = false;
+    }
 
     // Recreate button texture when needed
     if (m_bButtonsDirty || m_bWindowSizeChanged || !m_pButtonsTex)
@@ -173,7 +188,10 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
     pango_layout_set_font_description(layout, fontDesc);
     pango_font_description_free(fontDesc);
 
-    const int maxWidth = std::clamp(static_cast<int>(bufferSize.x - scaledPadding * 2 - scaledBtnSpace * 2), 0, INT_MAX);
+    const bool buttonsRight = cfg.buttonsAlign->value() != "left";
+    const double leftInset = scaledPadding + (buttonsRight ? 0 : scaledBtnSpace);
+    const double rightInset = scaledPadding + (buttonsRight ? scaledBtnSpace : 0);
+    const int maxWidth = std::clamp(static_cast<int>(bufferSize.x - leftInset - rightInset), 0, INT_MAX);
     pango_layout_set_width(layout, maxWidth * PANGO_SCALE);
     pango_layout_set_ellipsize(layout, PANGO_ELLIPSIZE_END);
 
@@ -182,10 +200,13 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
     int layoutWidth, layoutHeight;
     pango_layout_get_size(layout, &layoutWidth, &layoutHeight);
 
-    const bool isCenter = cfg.textAlign->value() != "left";
-    const int  xOffset  = isCenter
-        ? std::round(bufferSize.x / 2.0 - layoutWidth / PANGO_SCALE / 2.0)
-        : std::round(scaledPadding + scaledBtnSpace);
+    const auto textAlign = cfg.textAlign->value();
+    const double textWidth = layoutWidth / static_cast<double>(PANGO_SCALE);
+    const int xOffset = textAlign == "left"
+        ? std::round(leftInset)
+        : textAlign == "right"
+            ? std::round(bufferSize.x - rightInset - textWidth)
+            : std::round((bufferSize.x + leftInset - rightInset - textWidth) / 2.0);
     const int  yOffset  = std::round(bufferSize.y / 2.0 - layoutHeight / PANGO_SCALE / 2.0);
 
     cairo_move_to(CAIRO, xOffset, yOffset);
@@ -206,7 +227,7 @@ void CBar::renderBarTitle(const Vector2D& bufferSize, float scale) {
 void CBar::renderBarButtons(const Vector2D& bufferSize, float scale) {
     const auto& cfg = g_pGlobalState->cfg;
 
-    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() != "left";
+    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() == "right";
 
     const auto CAIROSURFACE = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, bufferSize.x, bufferSize.y);
     const auto CAIRO        = cairo_create(CAIROSURFACE);
@@ -362,7 +383,7 @@ bool CBar::isLayerSurfaceAbove() {
 bool CBar::doButtonPress(Vector2D coords) {
     const auto& cfg = g_pGlobalState->cfg;
 
-    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() != "left";
+    const bool BUTTONSRIGHT = cfg.buttonsAlign->value() == "right";
     float offset = cfg.padding->value();
     const auto btnPad = cfg.buttonPadding->value();
     const auto barH   = (double)cfg.barHeight->value();

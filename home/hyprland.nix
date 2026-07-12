@@ -1,4 +1,10 @@
-{ config, pkgs, hostname, lib, ... }:
+{
+  config,
+  pkgs,
+  hostname,
+  lib,
+  ...
+}:
 
 let
   hyprlandPkg = pkgs.hyprland-patched;
@@ -6,60 +12,63 @@ let
     pname = "gruvbar";
     version = "0.1";
     src = ../plugins/gruvbar;
-    nativeBuildInputs = [ pkgs.cmake pkgs.pkg-config ] ++ hyprlandPkg.nativeBuildInputs;
+    nativeBuildInputs = [
+      pkgs.cmake
+      pkgs.pkg-config
+    ]
+    ++ hyprlandPkg.nativeBuildInputs;
     buildInputs = [ hyprlandPkg ] ++ hyprlandPkg.buildInputs;
   };
+
+  keyringUnlock = pkgs.writeShellScript "unlock-gnome-keyring" ''
+    set -euo pipefail
+    if [ -r /run/secrets/keyring_password ]; then
+      exec ${pkgs.gnome-keyring}/bin/gnome-keyring-daemon \
+        --foreground --unlock --components=secrets,pkcs11 < /run/secrets/keyring_password
+    fi
+    exec ${pkgs.coreutils}/bin/true
+  '';
+
+  cliphistWatchers = pkgs.writeShellScript "cliphist-watchers" ''
+    set -euo pipefail
+    trap 'kill 0' EXIT TERM INT
+    ${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store &
+    ${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store &
+    ${pkgs.wl-clipboard}/bin/wl-paste --primary --type text --watch ${pkgs.cliphist}/bin/cliphist store &
+    ${pkgs.wl-clipboard}/bin/wl-paste --primary --type image --watch ${pkgs.cliphist}/bin/cliphist store &
+    wait
+  '';
 in
 {
-  # Hyprland user config (Hyprland 0.55+: Lua-based)
+  # Home Manager owns the generated Lua entry point and loads the hand-written
+  # modules in a deterministic order. The plugin is loaded before gruvbar.lua.
   wayland.windowManager.hyprland = {
     enable = true;
     package = hyprlandPkg;
 
-    # Adopt home-manager's new default config backend (silences the
-    # configType deprecation warning) and emit a generated hypr/.luarc.json
-    # so an editor's Lua LSP knows the `hl` API. We don't use HM's renderer:
-    # the real config is our hand-written Lua tree placed via xdg.configFile
-    # below, so HM generates no Hyprland config of its own.
     configType = "lua";
+    systemd.enable = true;
+    plugins = [ gruvbar ];
 
-    # Disable HM's systemd integration. Under configType = "lua" it would
-    # otherwise generate its own hypr/hyprland.lua, colliding with the
-    # hand-written one in xdg.configFile. Disabling it also flips the
-    # module's shouldGenerate to false (no hyprland.lua/.conf emitted) and
-    # silences the "systemd.enable but no settings" warning. We re-create
-    # hyprland-session.target ourselves (below) and start it from
-    # autostart.lua, because HM's startup hook only ever landed in
-    # hyprland.conf — which Hyprland 0.55 ignores once a hyprland.lua
-    # exists, leaving graphical-session.target (hyprpolkitagent et al.) dead.
-    systemd.enable = false;
+    extraLuaFiles = {
+      "00_env" = ../dotfiles/hypr/hosts + "/${hostname}/env.lua";
+      "10_look_and_feel" = ../dotfiles/hypr/look_and_feel.lua;
+      "20_input" = ../dotfiles/hypr/input.lua;
+      "30_binds" = ../dotfiles/hypr/binds.lua;
+      "40_window_rules" = ../dotfiles/hypr/window_rules.lua;
+      "50_gruvbar" = ../dotfiles/hypr/gruvbar.lua;
+      "60_monitors" = ../dotfiles/hypr/hosts + "/${hostname}/monitors.lua";
+      "70_workspaces" = ../dotfiles/hypr/hosts + "/${hostname}/workspaces.lua";
+      "80_settings" = ../dotfiles/hypr/hosts + "/${hostname}/settings.lua";
+      "gruvbar_path" = {
+        content = ''return "${gruvbar}/lib/libgruvbar.so"'';
+        autoLoad = false;
+      };
+    };
   };
 
-  # Place Hyprland config files
+  # Hyprpaper is independent of the Lua configuration.
   xdg.configFile = {
-    # Lua config (active path under Hyprland 0.55+)
-    "hypr/hyprland.lua".source       = ../dotfiles/hypr/hyprland.lua;
-    "hypr/look_and_feel.lua".source  = ../dotfiles/hypr/look_and_feel.lua;
-    "hypr/input.lua".source          = ../dotfiles/hypr/input.lua;
-    "hypr/binds.lua".source          = ../dotfiles/hypr/binds.lua;
-    "hypr/window_rules.lua".source   = ../dotfiles/hypr/window_rules.lua;
-    # Allow a host-specific autostart overlay when one exists.
-    "hypr/autostart.lua".source      =
-      if builtins.pathExists (../dotfiles/hypr/hosts + "/${hostname}/autostart.lua")
-      then ../dotfiles/hypr/hosts + "/${hostname}/autostart.lua"
-      else ../dotfiles/hypr/autostart.lua;
-    "hypr/gruvbar.lua".source        = ../dotfiles/hypr/gruvbar.lua;
-    # Generated stub so the user-edited gruvbar.lua doesn't carry a /nix/store hash.
-    "hypr/gruvbar_path.lua".text     = ''return "${gruvbar}/lib/libgruvbar.so"'';
-
-    # Per-host overlays — flattened so the entry point can plain require() them.
-    "hypr/env.lua".source        = ../dotfiles/hypr/hosts/${hostname}/env.lua;
-    "hypr/monitors.lua".source   = ../dotfiles/hypr/hosts/${hostname}/monitors.lua;
-    "hypr/workspaces.lua".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.lua;
-    "hypr/settings.lua".source   = ../dotfiles/hypr/hosts/${hostname}/settings.lua;
-
-  } // {
-    # Hyprpaper (separate program, unaffected by the Lua migration).
     "hypr/hyprpaper.conf".source = ../dotfiles/hypr/hyprpaper.conf;
     "hypr/backgrounds/rainynight.png".source = ../dotfiles/hypr/backgrounds/rainynight.png;
   };
@@ -95,38 +104,167 @@ in
           +dynamic-resolution +auto-reconnect \
           /clipboard /sound:sys:pulse /cert:tofu
       '';
-      Restart = "always";
+      Restart = "on-failure";
       RestartSec = 3;
     };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
-  # Session target that graphical-session.target BindsTo. home-manager
-  # normally provides this when hyprland.systemd.enable = true, which we
-  # turned off (see above) to stop it generating hyprland.lua. autostart.lua
-  # starts this target after publishing the Wayland env into the systemd/
-  # D-Bus user manager; graphical-session.target has RefuseManualStart=yes,
-  # so it can only be brought up by being pulled in through this one. This
-  # is what (re)starts hyprpolkitagent and any other graphical-session.target
-  # user units.
-  systemd.user.targets.hyprland-session = {
-    Unit = {
-      Description = "Hyprland compositor session";
-      Documentation = [ "man:systemd.special(7)" ];
-      BindsTo = [ "graphical-session.target" ];
-      Wants = [ "graphical-session-pre.target" ];
-      After = [ "graphical-session-pre.target" ];
+  services.hyprpolkitagent.enable = true;
+
+  programs.hyprlock = {
+    enable = true;
+    settings = {
+      general = {
+        hide_cursor = true;
+        ignore_empty_input = true;
+      };
+      background = [
+        {
+          monitor = "";
+          path = "screenshot";
+          blur_passes = 3;
+          blur_size = 8;
+        }
+      ];
+      input-field = [
+        {
+          monitor = "";
+          size = "320, 60";
+          position = "0, -80";
+          dots_center = true;
+          fade_on_empty = false;
+          inner_color = "rgb(3c3836)";
+          outer_color = "rgb(fe8019)";
+          font_color = "rgb(ebdbb2)";
+          outline_thickness = 3;
+          placeholder_text = "Password...";
+        }
+      ];
     };
   };
 
-  # Enable hyprpolkitagent as a systemd user service
-  systemd.user.services.hyprpolkitagent = {
-    Unit.Description = "Hyprland Polkit Authentication Agent";
-    Unit.After = [ "graphical-session.target" ];
-    Install.WantedBy = [ "graphical-session.target" ];
-    Service = {
-      ExecStart = "${pkgs.hyprpolkitagent}/libexec/hyprpolkitagent";
-      Restart = "on-failure";
+  services.hypridle = {
+    enable = true;
+    settings = {
+      general = {
+        lock_cmd = "pidof hyprlock || hyprlock";
+        before_sleep_cmd = "loginctl lock-session";
+        after_sleep_cmd = "hyprctl dispatch dpms on";
+      };
+      listener = [
+        {
+          timeout = 900;
+          on-timeout = "hyprlock";
+        }
+        {
+          timeout = 1200;
+          on-timeout = "hyprctl dispatch dpms off";
+          on-resume = "hyprctl dispatch dpms on";
+        }
+      ];
+    };
+  };
+
+  # SUPER+I is the deliberate opt-in for idle locking/DPMS; do not start this
+  # service automatically with the graphical session.
+  systemd.user.services.hypridle.Install.WantedBy = lib.mkForce [ ];
+
+  systemd.user.services = {
+    gnome-keyring = {
+      Unit = {
+        Description = "Unlock GNOME Keyring for the graphical session";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = keyringUnlock;
+        Type = "simple";
+        Restart = "on-failure";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    cliphist-watchers = {
+      Unit = {
+        Description = "Clipboard history watchers";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = cliphistWatchers;
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    hyprpaper = {
+      Unit = {
+        Description = "Hyprpaper wallpaper daemon";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${pkgs.hyprpaper}/bin/hyprpaper";
+        Restart = "on-failure";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    quickshell = {
+      Unit = {
+        Description = "Quickshell status bar";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${config.home.profileDirectory}/bin/quickshell -c bar";
+        Restart = "on-failure";
+        RestartSec = 2;
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    swaync = {
+      Unit = {
+        Description = "SwayNotificationCenter";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${pkgs.swaynotificationcenter}/bin/swaync";
+        Restart = "on-failure";
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    proton-mail = {
+      Unit = {
+        Description = "Proton Mail desktop client";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStart = "${pkgs.flatpak}/bin/flatpak run me.proton.Mail";
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
+    };
+
+    claude-desktop = {
+      Unit = {
+        Description = "Claude Desktop tray client";
+        PartOf = [ "graphical-session.target" ];
+        After = [ "graphical-session.target" ];
+      };
+      Service = {
+        ExecStartPre = "${pkgs.coreutils}/bin/sleep 3";
+        ExecStart = "${config.home.profileDirectory}/bin/claude-desktop --tray";
+        Restart = "on-failure";
+        RestartSec = 5;
+      };
+      Install.WantedBy = [ "graphical-session.target" ];
     };
   };
 

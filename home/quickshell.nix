@@ -3,17 +3,39 @@
 let
   system = "x86_64-linux";
   baseQs = inputs.quickshell.packages.${system}.default;
+  weatherScript = pkgs.writeShellApplication {
+    name = "quickshell-weather";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.curl
+      pkgs.jq
+    ];
+    text = builtins.readFile ../dotfiles/quickshell/bar/scripts/weather.sh;
+  };
+  sysmonScript = pkgs.writeShellApplication {
+    name = "quickshell-sysmon";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gawk
+      pkgs.jq
+      pkgs.procps
+    ];
+    text = builtins.readFile ../dotfiles/quickshell/bar/scripts/sysmon_panel.sh;
+  };
 
   # Patch quickshell for WebEngine support (upstream PR #351, not yet merged):
   # 1. Fix argv[0] passthrough — WebEngine/Chromium crashes without it
-  # 2. Disable jemalloc — conflicts with Chromium's memory allocator
+  # 2. Disable jemalloc — conflicts with Chromium's memory allocator.
+  # Remove this overlay when PR #351 is included upstream; it exists only for
+  # the Gemini WebEngine sidebar and should not become a permanent fork.
   patchedUnwrapped = baseQs.passthru.unwrapped.overrideAttrs (prev: {
     postPatch = (prev.postPatch or "") + ''
       substituteInPlace src/launch/launch.cpp \
         --replace-warn 'auto qArgC = 0;' 'auto qArgC = 1;'
     '';
-    cmakeFlags = builtins.filter (f: builtins.match ".*USE_JEMALLOC.*" f == null) prev.cmakeFlags
-      ++ [ "-DUSE_JEMALLOC:BOOL=OFF" ];
+    cmakeFlags = builtins.filter (f: builtins.match ".*USE_JEMALLOC.*" f == null) prev.cmakeFlags ++ [
+      "-DUSE_JEMALLOC:BOOL=OFF"
+    ];
     buildInputs = builtins.filter (dep: dep.pname or "" != "jemalloc") prev.buildInputs;
   });
 
@@ -41,11 +63,9 @@ in
     pkgs.cliphist
     pkgs.wl-clipboard
     pkgs.swayimg
-    pkgs.networkmanager
-    pkgs.iw
-    pkgs.bluez
-    pkgs.pulseaudio
     pkgs.swaynotificationcenter
+    weatherScript
+    sysmonScript
   ];
 
   # Place Quickshell config (recursive for entire bar directory)

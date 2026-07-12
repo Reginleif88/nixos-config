@@ -44,7 +44,10 @@ static void onPreConfigReload() {
     g_pGlobalState->buttons.clear();
     for (auto& b : g_pGlobalState->bars)
         if (auto bar = b.lock())
-            bar->m_bButtonsDirty = true;
+            {
+                bar->m_bButtonsDirty = true;
+                bar->m_bTextDirty = true;
+            }
 }
 
 // hl.plugin.gruvbar.add_button({ bg = "rgb(...)", size = 14, glyph = "X",

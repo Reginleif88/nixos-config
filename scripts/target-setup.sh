@@ -3,6 +3,7 @@
 # Handles items that can't be done before deployment:
 #   1. Set up sops-nix age key and encrypt secrets (first-time only)
 set -euo pipefail
+umask 077
 
 HOSTNAME="${1:-hyacinth}"
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,7 +29,12 @@ echo "[1/2] Checking age key..."
 ENCRYPTED_KEY="$REPO_DIR/secrets/keys.txt.age"
 
 if [ ! -f "$SOPS_KEY_FILE" ]; then
+  if [ -L "$SOPS_KEY_FILE" ]; then
+    echo "Refusing to use a symlink as the SOPS age key: $SOPS_KEY_FILE" >&2
+    exit 1
+  fi
   mkdir -p "$SOPS_KEY_DIR"
+  chmod 700 "$SOPS_KEY_DIR"
 
   if [ -f "$ENCRYPTED_KEY" ]; then
     # Decrypt the age key from the repo (passphrase-protected)
@@ -46,6 +52,18 @@ if [ ! -f "$SOPS_KEY_FILE" ]; then
   fi
 else
   echo "  → Age key already exists at $SOPS_KEY_FILE"
+fi
+
+if [ -L "$SOPS_KEY_FILE" ]; then
+  echo "Refusing to use a symlink as the SOPS age key: $SOPS_KEY_FILE" >&2
+  exit 1
+fi
+chmod 600 "$SOPS_KEY_FILE"
+chmod 700 "$SOPS_KEY_DIR"
+KEY_MODE=$(stat -c '%a' "$SOPS_KEY_FILE")
+if [ "$KEY_MODE" != "600" ]; then
+  echo "SOPS age key must be mode 600, found $KEY_MODE" >&2
+  exit 1
 fi
 
 FRESH_SETUP="${FRESH_SETUP:-false}"
@@ -72,10 +90,9 @@ creation_rules:
 EOF
   echo "  ✓ Updated $SOPS_YAML with your public key"
 
-  # Prompt for every secret declared in modules/common.nix (universal) plus
-  # any host-specific secrets. Blank values are accepted — sops-nix only
-  # needs the keys to be present in the decrypted YAML. Fill in missing
-  # values later with: sops edit secrets/secrets.yaml
+  # Prompt for the secrets used by the current host. Blank values are accepted
+  # because sops-nix only needs the keys to be present in the decrypted YAML;
+  # fill in missing values later with: sops edit secrets/secrets.yaml
   echo ""
   echo "  Enter values for declared secrets (press Enter to leave blank)."
   echo ""
@@ -91,6 +108,17 @@ EOF
   echo ""
   read -rsp "  keyring_password (hidden): " KEYRING_PASSWORD
   echo ""
+  CLOUDFLARED_TUNNEL_TOKEN=""
+  if [ "$HOSTNAME" = "ignis" ]; then
+    read -rsp "  cloudflared_tunnel_token (hidden): " CLOUDFLARED_TUNNEL_TOKEN
+    echo ""
+  fi
+
+  IGNIS_PASSWORD_HASH=""
+  if [ "$HOSTNAME" = "ignis" ]; then
+    read -rsp "  ignis_password_hash (SHA-512 hash for OVH console, hidden): " IGNIS_PASSWORD_HASH
+    echo ""
+  fi
 
   cat > "$SECRETS_FILE" << EOF
 github_token: $GITHUB_TOKEN
@@ -99,7 +127,12 @@ zlm_api_key: $ZLM_API_KEY
 gtasks_client_id: $GTASKS_CLIENT_ID
 gtasks_client_secret: $GTASKS_CLIENT_SECRET
 keyring_password: $KEYRING_PASSWORD
+cloudflared_tunnel_token: $CLOUDFLARED_TUNNEL_TOKEN
 EOF
+
+  if [ "$HOSTNAME" = "ignis" ]; then
+    printf 'ignis_password_hash: %s\n' "$IGNIS_PASSWORD_HASH" >> "$SECRETS_FILE"
+  fi
 
   sops --config "$SOPS_YAML" --encrypt --in-place "$SECRETS_FILE"
   echo "  ✓ Secrets encrypted at $SECRETS_FILE"

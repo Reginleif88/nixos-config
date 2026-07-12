@@ -1,7 +1,15 @@
-{ pkgs, lib, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  inputs,
+  ...
+}:
 
 let
   system = pkgs.stdenv.hostPlatform.system;
+  playwrightDataDir = "${config.xdg.cacheHome}/playwright-mcp";
+  gtasksPluginVersion = "0.1.0";
 in
 {
   # Node.js (replaces NVM), Bun, Gemini CLI, Codex CLI, Claude Code
@@ -10,7 +18,7 @@ in
     bun
     gemini-cli
     codex
-    jq  # used by statusline.sh
+    jq # used by statusline.sh
     inputs.claude-code.packages.${system}.default
   ];
 
@@ -24,13 +32,16 @@ in
     claudeCodePackage = inputs.claude-code.packages.${system}.default;
   };
 
-  # Claude Code settings. settings.local.json must be writable because Claude
-  # persists local permission choices to it.
+  # Repository-owned settings are intentionally immutable; local permission
+  # state is initialized once and then belongs to Claude Code.
   home.file.".claude/settings.json".source = ../dotfiles/claude/settings.json;
-  home.activation.install-claude-local-settings = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    ${pkgs.coreutils}/bin/install -Dm600 \
-      ${../dotfiles/claude/settings.local.json} \
-      "$HOME/.claude/settings.local.json"
+  home.activation.install-claude-local-settings = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    target="$HOME/.claude/settings.local.json"
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+      ${pkgs.coreutils}/bin/install -Dm600 \
+        ${../dotfiles/claude/settings.local.json} \
+        "$target"
+    fi
   '';
   home.file.".claude/statusline.sh" = {
     source = ../dotfiles/claude/statusline.sh;
@@ -39,16 +50,18 @@ in
 
   # Codex CLI config. Install as a regular writable file because Codex
   # persists choices like /model, /statusline, and /theme back to config.toml.
-  home.activation.install-codex-config = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    ${pkgs.coreutils}/bin/install -Dm600 \
-      ${../dotfiles/codex/config.toml} \
-      "$HOME/.codex/config.toml"
+  home.activation.install-codex-config = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    target="$HOME/.codex/config.toml"
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+      ${pkgs.coreutils}/bin/install -Dm600 \
+        ${../dotfiles/codex/config.toml} \
+        "$target"
+    fi
   '';
 
-  # Playwright MCP plugin: redirect user-data-dir to a writable path
-  # (the default uses PLAYWRIGHT_BROWSERS_PATH which is in the read-only Nix store)
+  # Playwright MCP plugin: keep browser state in the XDG cache, not /tmp.
   # Written as a real file (not symlink) via activation — Claude Desktop rejects symlinks.
-  home.activation.install-playwright-mcp = lib.hm.dag.entryAfter ["writeBoundary"] ''
+  home.activation.install-playwright-mcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     mcp_dir="$HOME/.claude/plugins/cache/claude-plugins-official/playwright/unknown"
     mkdir -p "$mcp_dir"
     rm -f "$mcp_dir/.mcp.json"
@@ -56,7 +69,11 @@ in
     ${builtins.toJSON {
       playwright = {
         command = "npx";
-        args = [ "@playwright/mcp@latest" "--user-data-dir" "/tmp/playwright-mcp" ];
+        args = [
+          "@playwright/mcp@latest"
+          "--user-data-dir"
+          "${playwrightDataDir}"
+        ];
       };
     }}
     MCPEOF
@@ -77,8 +94,9 @@ in
   '';
 
   # gtasks Claude plugin — copied as real files (Claude Desktop rejects symlinks)
-  home.activation.install-gtasks-plugin = lib.hm.dag.entryAfter ["writeBoundary"] ''
-    plugin_dir="$HOME/.claude/plugins/cache/local/gtasks/latest"
+  home.activation.install-gtasks-plugin = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    plugin_version="${gtasksPluginVersion}"
+    plugin_dir="$HOME/.claude/plugins/cache/local/gtasks/$plugin_version"
     rm -rf "$plugin_dir"
     mkdir -p "$plugin_dir/.claude-plugin" "$plugin_dir/skills/gtasks"
     cp ${../dotfiles/claude/plugins/gtasks/.claude-plugin/plugin.json} "$plugin_dir/.claude-plugin/plugin.json"
@@ -87,11 +105,23 @@ in
     # Register gtasks@local in installed_plugins.json so Claude Code loads it
     plugins_file="$HOME/.claude/plugins/installed_plugins.json"
     install_path="$plugin_dir"
-    if [ -f "$plugins_file" ]; then
-      ${pkgs.jq}/bin/jq --arg path "$install_path" \
-        '.plugins["gtasks@local"] = [{"scope":"user","installPath":$path,"version":"latest","installedAt":"2026-04-10T00:00:00.000Z","lastUpdated":"2026-04-10T00:00:00.000Z"}]' \
-        "$plugins_file" > "$plugins_file.tmp" && mv "$plugins_file.tmp" "$plugins_file"
+    mkdir -p "$(dirname "$plugins_file")"
+    if [ ! -f "$plugins_file" ]; then
+      printf '%s\n' '{"version":1,"plugins":{}}' > "$plugins_file"
     fi
+    now="$(date -u +%Y-%m-%dT%H:%M:%S.000Z)"
+    ${pkgs.jq}/bin/jq --arg path "$install_path" \
+      --arg version "$plugin_version" --arg now "$now" \
+      '.plugins = (.plugins // {})
+       | .plugins["gtasks@local"] = [{
+           "scope":"user",
+           "installPath":$path,
+           "version":$version,
+           "installedAt":(.plugins["gtasks@local"][0].installedAt // $now),
+           "lastUpdated":$now
+         }]' \
+      "$plugins_file" > "$plugins_file.tmp"
+    mv "$plugins_file.tmp" "$plugins_file"
   '';
 
   # direnv for per-project Node/tooling versions

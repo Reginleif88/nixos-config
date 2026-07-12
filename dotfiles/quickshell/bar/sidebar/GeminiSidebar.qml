@@ -10,22 +10,21 @@ Item {
     required property color bgColor
     required property color borderColor
     required property string targetScreen
+    required property bool targetWorkspaceActive
     property int panelWidth: 460
     property int triggerWidth: 4
     property url url: "https://gemini.google.com"
 
     property bool open: false
-    property var geminiProfile: null
-
-    WebEngineProfilePrototype {
-        id: geminiProfileProto
-        storageName: "gemini-sidebar"
-        persistentCookiesPolicy: WebEngineProfile.ForcePersistentCookies
+    readonly property var targetScreenObject: {
+        var screens = Quickshell.screens.values
+        for (var i = 0; i < screens.length; i++) {
+            if (screens[i].name === sidebarRoot.targetScreen)
+                return screens[i]
+        }
+        return null
     }
-
-    Component.onCompleted: {
-        sidebarRoot.geminiProfile = geminiProfileProto.instance()
-    }
+    readonly property bool available: targetScreenObject !== null && targetWorkspaceActive
 
     Timer {
         id: hideTimer
@@ -33,47 +32,58 @@ Item {
         onTriggered: sidebarRoot.open = false
     }
 
-    // Trigger zone: thin invisible strip on left edge
-    Variants {
-        model: Quickshell.screens
-
-        PanelWindow {
-            required property var modelData
-            screen: modelData
-            visible: modelData.name === sidebarRoot.targetScreen
-
-            anchors { top: true; bottom: true; left: true }
-            exclusiveZone: 0
-            implicitWidth: sidebarRoot.triggerWidth
-            color: "transparent"
-
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                onEntered: {
-                    hideTimer.stop()
-                    sidebarRoot.open = true
-                }
-                onExited: hideTimer.restart()
-            }
+    onAvailableChanged: {
+        if (!sidebarRoot.available) {
+            sidebarRoot.open = false
+            panelLoader.active = false
         }
     }
 
-    // Sidebar panel with embedded web view
-    Variants {
-        model: Quickshell.screens
+    // Trigger zone: one thin strip on the screen owning workspace 1.
+    PanelWindow {
+        screen: sidebarRoot.targetScreenObject
+        visible: sidebarRoot.available
+        anchors { top: true; bottom: true; left: true }
+        exclusiveZone: 0
+        implicitWidth: sidebarRoot.triggerWidth
+        color: "transparent"
+
+        MouseArea {
+            anchors.fill: parent
+            hoverEnabled: true
+            onEntered: {
+                hideTimer.stop()
+                sidebarRoot.open = true
+            }
+            onExited: hideTimer.restart()
+        }
+    }
+
+    // The WebEngine profile and view do not exist until the sidebar is opened.
+    // Closing the hover panel destroys them again after the short hide delay.
+    LazyLoader {
+        id: panelLoader
+        active: sidebarRoot.open && sidebarRoot.available
 
         PanelWindow {
             id: panel
-            required property var modelData
-            screen: modelData
-            visible: sidebarRoot.open && modelData.name === sidebarRoot.targetScreen
-
+            screen: sidebarRoot.targetScreenObject
+            visible: true
             anchors { top: true; bottom: true; left: true }
             exclusiveZone: 0
             implicitWidth: sidebarRoot.panelWidth
             color: sidebarRoot.bgColor
             focusable: true
+
+            property var geminiProfile: null
+
+            WebEngineProfilePrototype {
+                id: geminiProfileProto
+                storageName: "gemini-sidebar"
+                persistentCookiesPolicy: WebEngineProfile.ForcePersistentCookies
+            }
+
+            Component.onCompleted: panel.geminiProfile = geminiProfileProto.instance()
 
             Rectangle {
                 anchors.fill: parent
@@ -85,24 +95,19 @@ Item {
                     color: sidebarRoot.borderColor
                 }
 
-                Loader {
-                    id: webLoader
+                WebEngineView {
+                    id: webView
                     anchors.fill: parent
                     anchors.rightMargin: 1
-                    active: sidebarRoot.geminiProfile !== null
-
-                    sourceComponent: WebEngineView {
-                        id: webView
-                        url: sidebarRoot.url
-                        backgroundColor: sidebarRoot.bgColor
-                        profile: sidebarRoot.geminiProfile
-                    }
+                    url: sidebarRoot.url
+                    backgroundColor: sidebarRoot.bgColor
+                    profile: panel.geminiProfile
                 }
 
                 Shortcut {
                     sequence: "F5"
-                    enabled: sidebarRoot.open && webLoader.item !== null
-                    onActivated: webLoader.item.reload()
+                    enabled: sidebarRoot.open
+                    onActivated: webView.reload()
                 }
             }
 

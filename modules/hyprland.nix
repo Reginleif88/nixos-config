@@ -12,6 +12,8 @@
   # dconf (needed for GTK theming)
   programs.dconf.enable = true;
 
+  security.pam.services.hyprlock = { };
+
   # Don't add xdg-desktop-portal-{hyprland,gtk} to xdg.portal.extraPortals
   # here: programs.hyprland.enable wires both up automatically (the
   # nixpkgs module adds cfg.portalPackage, and its wayland-session.nix

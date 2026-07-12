@@ -28,14 +28,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-
     zen-browser.url = "github:youwen5/zen-browser-flake";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
     nix-cachyos-kernel.url = "github:xddxdd/nix-cachyos-kernel/release";
-
-    nixos-hardware.url = "github:NixOS/nixos-hardware/master";
 
     nix-vscode-extensions.url = "github:nix-community/nix-vscode-extensions";
 
@@ -55,7 +52,12 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager, ... }@inputs:
+  outputs =
+    {
+      nixpkgs,
+      home-manager,
+      ...
+    }@inputs:
     let
       system = "x86_64-linux";
 
@@ -64,26 +66,32 @@
         (import ./overlays/default.nix { inherit inputs; })
       ];
 
-      mkHost = hostname: hostDir: nixpkgs.lib.nixosSystem {
-        inherit system;
-        specialArgs = { inherit inputs; };
-        modules = [
-          hostDir
-          inputs.nix-flatpak.nixosModules.nix-flatpak
-          { nixpkgs.overlays = commonOverlays; }
-          home-manager.nixosModules.home-manager
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.backupFileExtension = "hm-backup";
-            home-manager.extraSpecialArgs = { inherit inputs; hostname = hostname; };
-            home-manager.users.reginleif88 = import ./home;
-          }
-        ];
-      };
+      mkHost =
+        hostname: hostDir:
+        nixpkgs.lib.nixosSystem {
+          inherit system;
+          specialArgs = { inherit inputs; };
+          modules = [
+            hostDir
+            inputs.nix-flatpak.nixosModules.nix-flatpak
+            { nixpkgs.overlays = commonOverlays; }
+            home-manager.nixosModules.home-manager
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.backupFileExtension = "hm-backup";
+              home-manager.extraSpecialArgs = {
+                inherit inputs;
+                hostname = hostname;
+              };
+              home-manager.users.reginleif88 = import ./home;
+            }
+          ];
+        };
     in
     {
       nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/hyacinth;
       nixosConfigurations.ignis = mkHost "ignis" ./hosts/ignis;
+      formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt-rfc-style;
     };
 }

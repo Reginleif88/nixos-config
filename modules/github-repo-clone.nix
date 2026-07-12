@@ -17,11 +17,14 @@
       StartLimitBurst = 3;
       Environment = [
         "HOME=/home/reginleif88"
-        "GH_CONFIG_DIR=/home/reginleif88/.config/gh"
       ];
     };
 
-    path = [ pkgs.gh pkgs.git pkgs.coreutils ];
+    path = [
+      pkgs.gh
+      pkgs.git
+      pkgs.coreutils
+    ];
 
     script = ''
       TOKEN_FILE="/run/secrets/github_token"
@@ -33,17 +36,18 @@
         exit 1
       fi
 
-      gh auth login --with-token --insecure-storage < "$TOKEN_FILE"
+      export GH_TOKEN="$(cat "$TOKEN_FILE")"
 
       mkdir -p "$REPOS_DIR"
-      for repo in $(cat "$REPOS_FILE"); do
+      while IFS= read -r repo; do
+        [ -n "$repo" ] || continue
         if [ ! -d "$REPOS_DIR/$repo" ]; then
           echo "Cloning Reginleif88/$repo..."
           gh repo clone "Reginleif88/$repo" "$REPOS_DIR/$repo"
         else
           echo "Skipping $repo (already exists)"
         fi
-      done
+      done < "$REPOS_FILE"
     '';
   };
 }
