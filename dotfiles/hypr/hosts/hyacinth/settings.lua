@@ -10,7 +10,9 @@ hl.window_rule({
   name = "windows-11-desktop",
   match = { class = "^(windows-11)$" },
   workspace = "2 silent",
+  tile = true,
   fullscreen = true,
+  fullscreen_state = "2 2",
   immediate = true,
 })
 

@@ -19,8 +19,15 @@ APICALL EXPORT std::string PLUGIN_API_VERSION() {
     return HYPRLAND_API_VERSION;
 }
 
+static bool shouldSkipWindow(PHLWINDOW window) {
+    return window->m_class == "windows-11" || window->m_initialClass == "windows-11";
+}
+
 static void onNewWindow(PHLWINDOW window) {
     if (window->m_X11DoesntWantBorders)
+        return;
+
+    if (shouldSkipWindow(window))
         return;
 
     if (std::ranges::any_of(window->m_windowDecorations,

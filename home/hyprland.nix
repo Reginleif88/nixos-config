@@ -88,9 +88,10 @@ in
           sleep 2
         done
         exec ${pkgs.freerdp}/bin/sdl-freerdp \
-          /v:127.0.0.1 /u:Dockur /p:admin \
+          /v:127.0.0.1 /u:Docker /p:admin \
           /wm-class:windows-11 /t:"Windows 11" \
-          /f /gfx:AVC444 /gdi:hw /network:auto \
+          /size:1920x1080 /gfx:AVC444 /gdi:hw /network:auto \
+          -grab-keyboard \
           +dynamic-resolution +auto-reconnect \
           /clipboard /sound:sys:pulse /cert:tofu
       '';

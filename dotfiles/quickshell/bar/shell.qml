@@ -527,6 +527,9 @@ ShellRoot {
             readonly property var hyprMonitor: Hyprland.monitorFor(bar.screen)
 
             readonly property var monitorWsIds: root.workspaceIdsForMonitor(bar.hyprMonitor)
+            readonly property bool hideForWindowsWorkspace: bar.hyprMonitor !== null
+                && bar.hyprMonitor.activeWorkspace !== null
+                && bar.hyprMonitor.activeWorkspace.id === 2
 
             // Anchor to the top edge, spanning full width
             anchors {
@@ -536,9 +539,10 @@ ShellRoot {
             }
 
             // Reserve space so windows don't overlap the bar
-            exclusiveZone: root.barHeight + root.barGap + root.barBottomGap
+            visible: !bar.hideForWindowsWorkspace
+            exclusiveZone: bar.hideForWindowsWorkspace ? 0 : root.barHeight + root.barGap + root.barBottomGap
 
-            implicitHeight: root.barHeight + root.barGap + root.barBottomGap
+            implicitHeight: bar.hideForWindowsWorkspace ? 0 : root.barHeight + root.barGap + root.barBottomGap
             color: "transparent"   // background painted by inner Rectangle
 
             // -------------------------------------------------------

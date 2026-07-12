@@ -1,5 +1,49 @@
 { pkgs, inputs, lib, ... }:
 
+let
+  windowsOem = pkgs.runCommand "windows-oem" { } ''
+    mkdir -p "$out"
+
+    cat > "$out/install.bat" <<'EOF'
+@echo off
+setlocal
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0configure-documents.ps1"
+EOF
+
+    cat > "$out/configure-documents.ps1" <<'EOF'
+$ErrorActionPreference = "Stop"
+
+$sharePath = "\\host.lan\Data"
+$timeZone = "Romance Standard Time"
+$documentsGuid = "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}"
+
+tzutil.exe /s $timeZone
+
+$userShellFolders = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+$shellFolders = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+
+New-Item -Path $userShellFolders -Force | Out-Null
+New-Item -Path $shellFolders -Force | Out-Null
+
+New-ItemProperty -Path $userShellFolders -Name "Personal" -PropertyType ExpandString -Value $sharePath -Force | Out-Null
+New-ItemProperty -Path $userShellFolders -Name $documentsGuid -PropertyType ExpandString -Value $sharePath -Force | Out-Null
+Set-ItemProperty -Path $shellFolders -Name "Personal" -Value $sharePath
+Set-ItemProperty -Path $shellFolders -Name $documentsGuid -Value $sharePath
+
+$desktop = [Environment]::GetFolderPath("Desktop")
+if ($desktop) {
+    $shortcut = Join-Path $desktop "Documents.lnk"
+    $shell = New-Object -ComObject WScript.Shell
+    $link = $shell.CreateShortcut($shortcut)
+    $link.TargetPath = $sharePath
+    $link.Save()
+}
+
+Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+EOF
+  '';
+in
 {
   imports = [
     ../../modules/common.nix
@@ -50,6 +94,8 @@
         CPU_MODEL = "host";
         DISK_SIZE = "256G";
         ALLOCATE = "Y";
+        ARGUMENTS = "-rtc base=localtime";
+        SAMBA = "Y";
       };
       devices = [
         "/dev/kvm:/dev/kvm"
@@ -60,7 +106,11 @@
         "127.0.0.1:3389:3389/tcp"
         "127.0.0.1:3389:3389/udp"
       ];
-      volumes = [ "/var/lib/windows:/storage" ];
+      volumes = [
+        "/var/lib/windows:/storage"
+        "/home/reginleif88/Documents:/shared"
+        "${windowsOem}:/oem:ro"
+      ];
       extraOptions = [
         "--cap-add=NET_ADMIN"
         "--stop-timeout=120"
