@@ -17,7 +17,6 @@ in
     android-tools
     scrcpy
     escrcpy
-    winboat
     blueman
     # protonmail-desktop — moved to Flatpak (me.proton.Mail) to escape nixpkgs
     # packaging lag; Flathub tracks Proton's forced-minimum bumps via weekly

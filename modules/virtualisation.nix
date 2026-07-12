@@ -26,16 +26,6 @@
     podman-compose
   ];
 
-  # Polkit rule for passwordless virt-manager access
-  environment.etc."polkit-1/rules.d/50-libvirt.rules".text = ''
-    polkit.addRule(function(action, subject) {
-      if (action.id == "org.libvirt.unix.manage" &&
-          subject.isInGroup("libvirt")) {
-        return polkit.Result.YES;
-      }
-    });
-  '';
-
   # Default NAT network auto-start
   systemd.services.libvirt-default-network = {
     description = "Start libvirt default NAT network";

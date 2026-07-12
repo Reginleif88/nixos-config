@@ -24,9 +24,14 @@ in
     claudeCodePackage = inputs.claude-code.packages.${system}.default;
   };
 
-  # Claude Code settings (dotfile symlinks)
+  # Claude Code settings. settings.local.json must be writable because Claude
+  # persists local permission choices to it.
   home.file.".claude/settings.json".source = ../dotfiles/claude/settings.json;
-  home.file.".claude/settings.local.json".source = ../dotfiles/claude/settings.local.json;
+  home.activation.install-claude-local-settings = lib.hm.dag.entryAfter ["writeBoundary"] ''
+    ${pkgs.coreutils}/bin/install -Dm600 \
+      ${../dotfiles/claude/settings.local.json} \
+      "$HOME/.claude/settings.local.json"
+  '';
   home.file.".claude/statusline.sh" = {
     source = ../dotfiles/claude/statusline.sh;
     executable = true;

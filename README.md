@@ -62,14 +62,11 @@ nixos-config/
 │   │   ├── default.nix             # Host entry point
 │   │   ├── configuration.nix       # Desktop system config
 │   │   └── hardware-configuration.nix
-│   ├── wisteria/
-│   │   ├── default.nix             # Host entry point
-│   │   ├── configuration.nix       # ThinkPad system config
-│   │   └── hardware-configuration.nix
-│   └── clematis/
+│   └── ignis/
 │       ├── default.nix             # Host entry point
-│       ├── configuration.nix       # Remote VM system config
+│       ├── configuration.nix       # VPS system config
 │       └── hardware-configuration.nix
+├── archive/                         # Decommissioned host configurations
 ├── modules/
 │   ├── core.nix                    # Base packages, fonts, Flatpak
 │   ├── hyprland.nix                # Compositor and desktop components
@@ -99,7 +96,7 @@ nixos-config/
 │   ├── claude/                     # Claude Code settings
 │   ├── fuzzel/                     # App launcher config
 │   ├── hypr/                       # Hyprland configs (deployed via home.file)
-│   │   └── hosts/{hyacinth,wisteria,clematis}/  # Per-host env, monitors, workspaces, settings
+│   │   └── hosts/hyacinth/          # Per-host env, monitors, workspaces, settings
 │   ├── quickshell/bar/             # Quickshell QML bar + scripts
 │   ├── swaync/                     # Notification center config and theme
 │   └── zen-browser/                # Zen Browser user.js and policies.json
@@ -129,8 +126,8 @@ nix-shell -p git sops age
 git clone https://github.com/Reginleif88/nixos-config.git ~/Documents/nixos-config
 cd ~/Documents/nixos-config
 
-./scripts/target-setup.sh hyacinth # or wisteria / clematis
-sudo nixos-rebuild switch --flake .#hyacinth  # or .#wisteria / .#clematis
+./scripts/target-setup.sh hyacinth # or ignis
+sudo nixos-rebuild switch --flake .#hyacinth  # or .#ignis
 ```
 
 The `target-setup.sh` script handles:

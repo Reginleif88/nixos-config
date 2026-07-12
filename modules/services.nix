@@ -1,6 +1,9 @@
 { pkgs, ... }:
 
 {
+  # Allow PipeWire to acquire realtime priority and avoid xruns under load.
+  security.rtkit.enable = true;
+
   # PipeWire audio stack
   services.pipewire = {
     enable = true;

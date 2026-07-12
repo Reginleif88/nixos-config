@@ -12,9 +12,9 @@ SOPS_YAML="$REPO_DIR/secrets/.sops.yaml"
 SECRETS_FILE="$REPO_DIR/secrets/secrets.yaml"
 
 case "$HOSTNAME" in
-  hyacinth|wisteria|clematis) ;;
+  hyacinth|ignis) ;;
   *)
-    echo "Unknown host '$HOSTNAME'. Expected one of: hyacinth, wisteria, clematis" >&2
+    echo "Unknown host '$HOSTNAME'. Expected one of: hyacinth, ignis" >&2
     exit 1
     ;;
 esac
@@ -100,17 +100,6 @@ gtasks_client_id: $GTASKS_CLIENT_ID
 gtasks_client_secret: $GTASKS_CLIENT_SECRET
 keyring_password: $KEYRING_PASSWORD
 EOF
-
-  if [ "$HOSTNAME" = "clematis" ]; then
-    read -rsp "  wayvnc_password (hidden): " WAYVNC_PASSWORD
-    echo ""
-    read -rsp "  cloudflare_dns_token (hidden): " CLOUDFLARE_DNS_TOKEN
-    echo ""
-    cat >> "$SECRETS_FILE" << EOF
-wayvnc_password: $WAYVNC_PASSWORD
-cloudflare_dns_token: $CLOUDFLARE_DNS_TOKEN
-EOF
-  fi
 
   sops --config "$SOPS_YAML" --encrypt --in-place "$SECRETS_FILE"
   echo "  ✓ Secrets encrypted at $SECRETS_FILE"

@@ -5,12 +5,12 @@
 # the tunnel is managed out-of-band (on the Proxmox host) and is intentionally
 # NOT declared here — this module only stands up the origin the tunnel dials.
 #
-# Topology (identical to Ignis — see modules/ignis.nix + hosts/clematis):
+# Topology (identical to Ignis — see modules/ignis.nix + archived clematis host):
 #   browser ──HTTPS──▶ Cloudflare edge (Access gate)
 #           ──tunnel─▶ cloudflared on the Proxmox HOST (192.168.1.150)
 #           ──LAN────▶ this VM's origin  192.168.1.41:8081  (opened to the
 #                      Proxmox host ALONE by the firewall rule in
-#                      hosts/clematis/configuration.nix)
+#                      archive/hosts/clematis/configuration.nix)
 #
 # SECURITY — READ BEFORE CHANGING: code-server runs with `--auth none` because
 # Cloudflare Access is the authentication gate, exactly as Ignis relies on it.

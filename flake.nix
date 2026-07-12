@@ -84,8 +84,6 @@
     in
     {
       nixosConfigurations.hyacinth = mkHost "hyacinth" ./hosts/hyacinth;
-      nixosConfigurations.wisteria = mkHost "wisteria" ./hosts/wisteria;
-      nixosConfigurations.clematis = mkHost "clematis" ./hosts/clematis;
       nixosConfigurations.ignis = mkHost "ignis" ./hosts/ignis;
     };
 }

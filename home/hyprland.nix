@@ -43,9 +43,7 @@ in
     "hypr/input.lua".source          = ../dotfiles/hypr/input.lua;
     "hypr/binds.lua".source          = ../dotfiles/hypr/binds.lua;
     "hypr/window_rules.lua".source   = ../dotfiles/hypr/window_rules.lua;
-    # Autostart: per-host so that clematis can omit hyprpaper / Proton Mail
-    # / claude-desktop-tray, all of which are pointless on a headless VM
-    # streamed over noVNC.
+    # Allow a host-specific autostart overlay when one exists.
     "hypr/autostart.lua".source      =
       if builtins.pathExists (../dotfiles/hypr/hosts + "/${hostname}/autostart.lua")
       then ../dotfiles/hypr/hosts + "/${hostname}/autostart.lua"
@@ -60,13 +58,8 @@ in
     "hypr/workspaces.lua".source = ../dotfiles/hypr/hosts/${hostname}/workspaces.lua;
     "hypr/settings.lua".source   = ../dotfiles/hypr/hosts/${hostname}/settings.lua;
 
-  } // lib.optionalAttrs (hostname != "clematis") {
+  } // {
     # Hyprpaper (separate program, unaffected by the Lua migration).
-    # Skipped on clematis: nothing autostarts hyprpaper there, and
-    # leaving the wallpaper out drops H.264 bitrate by 20-40% during
-    # static desktop (a complex 1920x1080 background eats most of the
-    # bits in every IDR frame). Hyprland's solid-grey fallback applies
-    # automatically because settings.lua disables splash + logo.
     "hypr/hyprpaper.conf".source = ../dotfiles/hypr/hyprpaper.conf;
     "hypr/backgrounds/rainynight.png".source = ../dotfiles/hypr/backgrounds/rainynight.png;
   };
@@ -81,6 +74,30 @@ in
   home.file.".config/hypr/smart-close.sh" = {
     source = ../dotfiles/hypr/smart-close.sh;
     executable = true;
+  };
+
+  systemd.user.services.windows-desktop = lib.mkIf (hostname == "hyacinth") {
+    Unit = {
+      Description = "Windows 11 workspace via SDL FreeRDP";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = pkgs.writeShellScript "windows-desktop" ''
+        until ${pkgs.netcat-openbsd}/bin/nc -z 127.0.0.1 3389; do
+          sleep 2
+        done
+        exec ${pkgs.freerdp}/bin/sdl-freerdp \
+          /v:127.0.0.1 /u:Dockur /p:admin \
+          /wm-class:windows-11 /t:"Windows 11" \
+          /f /gfx:AVC444 /gdi:hw /network:auto \
+          +dynamic-resolution +auto-reconnect \
+          /clipboard /sound:sys:pulse /cert:tofu
+      '';
+      Restart = "always";
+      RestartSec = 3;
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Session target that graphical-session.target BindsTo. home-manager

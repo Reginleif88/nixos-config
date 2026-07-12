@@ -5,6 +5,7 @@
 
   programs.hyprland = {
     enable = true;
+    package = pkgs.hyprland-patched;
     xwayland.enable = true;
   };
 

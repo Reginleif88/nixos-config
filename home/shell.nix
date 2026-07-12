@@ -15,7 +15,7 @@
       la = "ls -A";
       pai = "bun $HOME/.claude/PAI/Tools/pai.ts";
     };
-    shellAliases.hs = lib.mkIf (builtins.elem hostname [ "hyacinth" "wisteria" ]) "exec start-hyprland";
+    shellAliases.hs = lib.mkIf (hostname == "hyacinth") "exec start-hyprland";
     initContent = ''
       # Add npm global bin to PATH for the current session
       export PATH="$HOME/.npm-global/bin:$PATH"

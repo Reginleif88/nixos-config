@@ -215,6 +215,7 @@ fetch_forecast() {
     forecast+="]"
 
     # ── Write final JSON to cache ───────────────────────────────────
+    local cache_tmp="${FORECAST_CACHE}.tmp.$$"
     jq -nc \
         --arg icon "$cur_icon" \
         --argjson temp "$cur_temp" \
@@ -224,7 +225,7 @@ fetch_forecast() {
         --argjson is_day "$cur_is_day" \
         --argjson forecast "$forecast" \
         '{current:{icon:$icon,temp:$temp,feels_like:$feels_like,hex:$hex,desc:$desc,is_day:$is_day},forecast:$forecast,ready:true}' \
-        > "$FORECAST_CACHE"
+        > "$cache_tmp" && mv -f "$cache_tmp" "$FORECAST_CACHE"
 }
 
 # ── Cache freshness check ──────────────────────────────────────────
