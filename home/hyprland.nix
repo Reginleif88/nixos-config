@@ -87,6 +87,15 @@ in
     executable = true;
   };
 
+  # sdl-freerdp ships its own hotkey layer, gated on SDL_KeyModMask (default
+  # KMOD_RSHIFT) and firing on bare scancodes: D disconnects, Return toggles
+  # fullscreen, M minimizes. Hyprland forwards any combo it has no bind for, so
+  # SUPER+D reached the client and tore the session down. KMOD_NONE is FreeRDP's
+  # documented off-switch for the whole layer, leaving those keys to the guest.
+  xdg.configFile."freerdp/sdl-freerdp.json" = lib.mkIf (hostname == "hyacinth") {
+    text = builtins.toJSON { SDL_KeyModMask = [ "KMOD_NONE" ]; };
+  };
+
   systemd.user.services.windows-desktop = lib.mkIf (hostname == "hyacinth") {
     Unit = {
       Description = "Windows 11 workspace via SDL FreeRDP";
