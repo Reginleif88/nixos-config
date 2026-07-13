@@ -68,9 +68,12 @@ let
         pull --ff-only
   '';
 
-  # Build the current checkout as the user. npm ci follows the committed lockfile
-  # on every explicit deployment, while Obsidian's downloaded assets remain a
-  # one-time application artifact. Chromium comes from pkgs.chromium.
+  # Build the current checkout as the user. Deps are reinstalled only when the
+  # lockfile actually changed (mtime vs a stamp) — this build runs on every
+  # `nixos-rebuild switch`, and an unconditional `npm ci` would make each one
+  # re-download the whole dependency tree and hard-require network. Obsidian's
+  # assets are fetched once (skipped forever after). Chromium comes from
+  # pkgs.chromium (see the unit env), so setup runs with --no-chromium.
   buildScript = pkgs.writeShellScript "ignis-build" ''
     set -euo pipefail
     cd ${checkout}
@@ -78,8 +81,11 @@ let
     export PATH=${buildPath}:$PATH
     export SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt
 
-    echo "[ignis] installing deps from package-lock.json"
-    npm ci --no-audit --no-fund
+    if [ ! -e node_modules/.ignis-stamp ] || [ package-lock.json -nt node_modules/.ignis-stamp ]; then
+      echo "[ignis] installing deps (npm ci)"
+      npm ci --no-audit --no-fund
+      touch node_modules/.ignis-stamp
+    fi
 
     if [ ! -f obsidian-app/index.html ]; then
       echo "[ignis] fetching Obsidian assets (one-time)"
@@ -91,8 +97,49 @@ let
   '';
 in
 {
-  # Deployment is explicit and observable. A normal NixOS switch never reaches
-  # into the user's checkout, pulls network state, or runs npm.
+  # ── Rebuild-time refresh ────────────────────────────────────────────────────
+  # Runs on every `nixos-rebuild switch` (and boot): pull the vault, rebuild the
+  # bundles, then restart the unit so the new build is served. Without this a
+  # switch updates only the UNIT DEFINITION and silently leaves the previously
+  # built bundles running — the box stays up, serves stale notes, and reports
+  # success. The oneshot units below stay available for deploying without a
+  # switch, but the switch itself must deploy.
+  #
+  # On a failed build we keep the running instance up rather than restarting into
+  # a broken tree; a failed pull is a warning, and we build the current checkout.
+  # NOTE: this shells out to npm during activation, so a rebuild that changes the
+  # lockfile (or the very first one) needs network. Plain rebuilds only re-bundle
+  # (offline, a few seconds) thanks to the stamp check in buildScript.
+  # `etc` is a dep so the new unit file is symlinked under /etc/systemd/system
+  # before we touch it; activation scripts otherwise run before
+  # switch-to-configuration writes /etc.
+  system.activationScripts.ignis = {
+    deps = [
+      "users"
+      "groups"
+      "etc"
+    ];
+    text = ''
+      echo "[ignis] refreshing from ${checkout}"
+      if ! ${pkgs.util-linux}/bin/runuser -u ${user} -- ${pullScript}; then
+        echo "[ignis] vault pull failed — building from the current checkout" >&2
+      fi
+      if ${pkgs.util-linux}/bin/runuser -u ${user} -- ${buildScript}; then
+        # Activation scripts run BEFORE switch-to-configuration's own
+        # daemon-reload, so systemd still has the previous generation's unit
+        # cached here. Reload first, otherwise this restart re-execs ignis
+        # against the OLD unit — the exact race that left a python3-less process
+        # running after python3 was first added to `path` below.
+        ${pkgs.systemd}/bin/systemctl daemon-reload
+        ${pkgs.systemd}/bin/systemctl restart ignis.service || true
+      else
+        echo "[ignis] build failed — keeping the current instance running" >&2
+      fi
+    '';
+  };
+
+  # Deploy without a full switch. Same scripts the activation hook runs, exposed
+  # as units so `systemctl start ignis-refresh` is a first-class, logged action.
   systemd.services.ignis-build = {
     description = "Build Ignis from the checked-out Yggdrasil source";
     after = [ "network-online.target" ];
