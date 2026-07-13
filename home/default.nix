@@ -18,10 +18,14 @@ in
   imports = [
     ./shell.nix
     ./git.nix
+    # AI CLI tooling (claude-code + claude-provider) is host-agnostic: shell.nix
+    # defines the `claude()` wrapper on every host, so its dependencies must be
+    # installed on every host too. Desktop-only AI bits live in ./ai-desktop.nix.
+    ./ai.nix
   ]
   ++ lib.optionals isGraphical [
     inputs.claude-desktop.homeManagerModules.default
-    ./ai.nix
+    ./ai-desktop.nix
     ./kitty.nix
     ./gtk.nix
   ]

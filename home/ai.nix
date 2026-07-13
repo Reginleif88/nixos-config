@@ -1,14 +1,20 @@
 {
-  config,
   pkgs,
   lib,
   inputs,
   ...
 }:
 
+# AI CLI tooling — imported on EVERY host, graphical or headless.
+#
+# This module must stay headless-safe: home/shell.nix defines a `claude()` zsh
+# wrapper unconditionally, and that wrapper depends on both the claude-code
+# binary and ~/.local/bin/claude-provider from here. Gating this module (it was
+# previously desktop-only) left ignis with a wrapper pointing at two paths that
+# did not exist. Desktop-only pieces live in ./ai-desktop.nix instead.
+
 let
   system = pkgs.stdenv.hostPlatform.system;
-  playwrightDataDir = "${config.xdg.cacheHome}/playwright-mcp";
   gtasksPluginVersion = "0.1.0";
 in
 {
@@ -21,16 +27,6 @@ in
     jq # used by statusline.sh
     inputs.claude-code.packages.${system}.default
   ];
-
-  # Claude Desktop (via claude-cowork-nix home-manager module)
-  programs.claude-desktop = {
-    enable = true;
-    # Wire CLAUDE_CODE_LOCAL_BINARY into the Electron wrapper so the in-app
-    # Code section's LOCAL sub-mode can spawn claude-code directly (bypasses
-    # CCD's Linux-incompatible getHostPlatform download path).
-    # Same flake input as home.packages above — deduplicated in the store.
-    claudeCodePackage = inputs.claude-code.packages.${system}.default;
-  };
 
   # Repository-owned settings are intentionally immutable; local permission
   # state is initialized once and then belongs to Claude Code.
@@ -59,27 +55,10 @@ in
     fi
   '';
 
-  # Playwright MCP plugin: keep browser state in the XDG cache, not /tmp.
-  # Written as a real file (not symlink) via activation — Claude Desktop rejects symlinks.
-  home.activation.install-playwright-mcp = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    mcp_dir="$HOME/.claude/plugins/cache/claude-plugins-official/playwright/unknown"
-    mkdir -p "$mcp_dir"
-    rm -f "$mcp_dir/.mcp.json"
-    cat > "$mcp_dir/.mcp.json" << 'MCPEOF'
-    ${builtins.toJSON {
-      playwright = {
-        command = "npx";
-        args = [
-          "@playwright/mcp@latest"
-          "--user-data-dir"
-          "${playwrightDataDir}"
-        ];
-      };
-    }}
-    MCPEOF
-  '';
-
-  # Claude provider toggle (also used by Quickshell bar and zsh initExtra)
+  # Claude provider toggle (also used by Quickshell bar and zsh initExtra).
+  # Headless-safe: with no /run/secrets/zlm_api_key (the secret is declared on
+  # hyacinth only) `--env` just unsets the ZLM vars and Claude Code talks to
+  # Anthropic directly.
   home.file.".local/bin/claude-provider" = {
     source = ../dotfiles/quickshell/bar/scripts/claude_provider.sh;
     executable = true;
@@ -87,7 +66,8 @@ in
 
   # gtasks credentials from sops secrets — re-evaluated on every shell start
   # (sessionVariablesExtra uses hm-session-vars.sh which is guarded by
-  # __HM_SESS_VARS_SOURCED, set at graphical-session time before /run/secrets/ exists)
+  # __HM_SESS_VARS_SOURCED, set at graphical-session time before /run/secrets/ exists).
+  # On hosts without the secrets these expand to empty strings.
   programs.zsh.initContent = ''
     export GTASKS_CLIENT_ID="$(cat /run/secrets/gtasks_client_id 2>/dev/null)"
     export GTASKS_CLIENT_SECRET="$(cat /run/secrets/gtasks_client_secret 2>/dev/null)"
