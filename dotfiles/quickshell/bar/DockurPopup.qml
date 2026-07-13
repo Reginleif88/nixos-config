@@ -4,7 +4,8 @@ import Quickshell
 import Quickshell.Wayland
 import Quickshell.Io
 
-// Confirmation popup for stopping the memory-heavy Dockur Windows VM.
+// Confirmation popup for the Dockur Windows VM: either drop just the FreeRDP
+// session (leaving the VM running) or stop the memory-heavy container itself.
 PopupWindow {
     id: popup
     visible: false
@@ -23,6 +24,7 @@ PopupWindow {
     required property color fgColor
     required property color mutedColor
     required property color accentRed
+    required property color accentBlue
     required property color accentYellow
     required property string fontFamily
     required property int fontSize
@@ -32,31 +34,67 @@ PopupWindow {
     color: popup.bgColor
 
     property bool shuttingDown: false
+    property bool disconnecting: false
     property string actionStatus: ""
+    property bool statusIsError: false
+
+    readonly property bool busy: shuttingDown || disconnecting
+
+    // The RDP client is a plain user service, so it stops without pkexec.
+    readonly property string disconnectCommand:
+        "systemctl --user stop windows-desktop.service"
 
     readonly property string shutdownCommand:
-        "systemctl --user stop windows-desktop.service; " +
+        disconnectCommand + "; " +
         "exec pkexec systemctl stop docker-windows.service"
 
     function toggleConfirmation() {
-        if (shutdownProc.running)
+        if (busy)
             return
 
         if (visible) {
             visible = false
         } else {
             actionStatus = ""
+            statusIsError = false
             visible = true
         }
     }
 
+    function startDisconnect() {
+        if (busy)
+            return
+
+        disconnecting = true
+        actionStatus = "Closing RDP session…"
+        statusIsError = false
+        disconnectProc.running = true
+    }
+
     function startShutdown() {
-        if (shutdownProc.running)
+        if (busy)
             return
 
         shuttingDown = true
         actionStatus = "Stopping Windows…"
+        statusIsError = false
         shutdownProc.running = true
+    }
+
+    Process {
+        id: disconnectProc
+        command: ["bash", "-c", popup.disconnectCommand]
+
+        onExited: function(exitCode, exitStatus) {
+            popup.disconnecting = false
+            popup.statusIsError = exitCode !== 0
+            if (exitCode === 0) {
+                popup.actionStatus = "RDP session closed"
+                closeTimer.restart()
+            } else {
+                popup.actionStatus = "Disconnect failed"
+            }
+        }
     }
 
     Process {
@@ -65,6 +103,7 @@ PopupWindow {
 
         onExited: function(exitCode, exitStatus) {
             popup.shuttingDown = false
+            popup.statusIsError = exitCode !== 0
             if (exitCode === 0) {
                 popup.actionStatus = "Windows stopped"
                 closeTimer.restart()
@@ -78,6 +117,40 @@ PopupWindow {
         id: closeTimer
         interval: 1400
         onTriggered: popup.visible = false
+    }
+
+    // Shared look for the three stacked action buttons.
+    component ActionButton: Rectangle {
+        id: btn
+
+        required property string label
+        required property color accent
+        property bool enabledAction: true
+
+        signal activated()
+
+        width: parent.width
+        height: 30
+        radius: 4
+        color: btn.enabledAction
+            ? Qt.rgba(btn.accent.r, btn.accent.g, btn.accent.b, 0.22)
+            : popup.mutedColor
+
+        Text {
+            anchors.centerIn: parent
+            text: btn.label
+            color: btn.enabledAction ? btn.accent : popup.mutedColor
+            font.pixelSize: popup.fontSize - 1
+            font.family: popup.fontFamily
+            font.bold: true
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            enabled: btn.enabledAction
+            cursorShape: Qt.PointingHandCursor
+            onClicked: btn.activated()
+        }
     }
 
     Rectangle {
@@ -111,70 +184,39 @@ PopupWindow {
                 width: parent.width
                 text: popup.shuttingDown
                     ? "Stopping the Windows container and desktop client…"
-                    : "Shut down Windows to free its allocated memory?"
+                    : popup.disconnecting
+                        ? "Closing the FreeRDP session…"
+                        : "Close the RDP session, or shut Windows down to free its allocated memory?"
                 color: popup.fgColor
                 font.pixelSize: popup.fontSize - 1
                 font.family: popup.fontFamily
                 wrapMode: Text.WordWrap
             }
 
-            Row {
-                width: parent.width
-                spacing: 8
+            ActionButton {
+                label: popup.disconnecting ? "Disconnecting…" : "Disconnect RDP"
+                accent: popup.accentBlue
+                enabledAction: !popup.busy
+                onActivated: popup.startDisconnect()
+            }
 
-                Rectangle {
-                    width: (parent.width - parent.spacing) / 2
-                    height: 30
-                    radius: 4
-                    color: popup.mutedColor
+            ActionButton {
+                label: popup.shuttingDown ? "Stopping…" : "Shut down VM"
+                accent: popup.accentRed
+                enabledAction: !popup.busy
+                onActivated: popup.startShutdown()
+            }
 
-                    Text {
-                        anchors.centerIn: parent
-                        text: "Cancel"
-                        color: popup.fgColor
-                        font.pixelSize: popup.fontSize - 1
-                        font.family: popup.fontFamily
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: popup.visible = false
-                    }
-                }
-
-                Rectangle {
-                    width: (parent.width - parent.spacing) / 2
-                    height: 30
-                    radius: 4
-                    color: popup.shuttingDown
-                        ? popup.mutedColor
-                        : Qt.rgba(popup.accentRed.r, popup.accentRed.g,
-                                  popup.accentRed.b, 0.22)
-
-                    Text {
-                        anchors.centerIn: parent
-                        text: popup.shuttingDown ? "Stopping…" : "Shut down"
-                        color: popup.shuttingDown ? popup.mutedColor : popup.accentRed
-                        font.pixelSize: popup.fontSize - 1
-                        font.family: popup.fontFamily
-                        font.bold: true
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        enabled: !popup.shuttingDown
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: popup.startShutdown()
-                    }
-                }
+            ActionButton {
+                label: "Cancel"
+                accent: popup.fgColor
+                onActivated: popup.visible = false
             }
 
             Text {
                 visible: popup.actionStatus !== ""
                 text: popup.actionStatus
-                color: popup.actionStatus === "Windows stopped"
-                    ? popup.accentYellow : popup.accentRed
+                color: popup.statusIsError ? popup.accentRed : popup.accentYellow
                 font.pixelSize: popup.fontSize - 2
                 font.family: popup.fontFamily
             }

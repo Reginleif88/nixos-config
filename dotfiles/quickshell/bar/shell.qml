@@ -1038,14 +1038,14 @@ ShellRoot {
                         }
                     }
 
-                    // ---- Dockur Windows shutdown pill (right-click) ----
+                    // ---- Dockur Windows disconnect/shutdown pill (right-click) ----
                     Pill {
                         Text {
                             id: dockurButton
                             text: "󰍲"
                             font.pixelSize: root.fontSize
                             font.family: root.fontFamily
-                            color: dockurPopup.shuttingDown
+                            color: dockurPopup.busy
                                 ? root.accentYellow : root.accentBlue
 
                             MouseArea {
@@ -1435,6 +1435,7 @@ ShellRoot {
                 fgColor: root.fgColor
                 mutedColor: root.mutedColor
                 accentRed: root.accentRed
+                accentBlue: root.accentBlue
                 accentYellow: root.accentYellow
                 fontFamily: root.fontFamily
                 fontSize: root.fontSize
