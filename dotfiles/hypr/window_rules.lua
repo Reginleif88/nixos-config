@@ -41,16 +41,6 @@ hl.window_rule({
   float = true,
 })
 
--- Start Proton Mail minimized: park it on special:minimized the instant it
--- opens. `silent` sends it there without switching the view, so it never
--- flashes on screen. Replaces the old autostart `hl.timer(5000)` park, which
--- raced the window's first map and could miss it on a slow boot.
-hl.window_rule({
-  name      = "minimize-proton-mail",
-  match     = { class = "^(proton-mail)$" },
-  workspace = "special:minimized silent",
-})
-
 -- Layer rules
 
 hl.layer_rule({

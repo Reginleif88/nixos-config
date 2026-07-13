@@ -29,13 +29,15 @@ let
     exec ${pkgs.coreutils}/bin/true
   '';
 
+  # Clipboard only, never the primary selection: --primary fires on every mouse
+  # drag-highlight, so it floods the history with mid-drag fragments that then
+  # evict real copies once cliphist hits its max-items cap. Middle-click paste
+  # is unaffected -- it never went through cliphist.
   cliphistWatchers = pkgs.writeShellScript "cliphist-watchers" ''
     set -euo pipefail
     trap 'kill 0' EXIT TERM INT
     ${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store &
     ${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store &
-    ${pkgs.wl-clipboard}/bin/wl-paste --primary --type text --watch ${pkgs.cliphist}/bin/cliphist store &
-    ${pkgs.wl-clipboard}/bin/wl-paste --primary --type image --watch ${pkgs.cliphist}/bin/cliphist store &
     wait
   '';
 in
@@ -107,6 +109,7 @@ in
       Restart = "on-failure";
       RestartSec = 3;
     };
+    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   services.hyprpolkitagent.enable = true;
@@ -149,7 +152,7 @@ in
       general = {
         lock_cmd = "pidof hyprlock || hyprlock";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "hyprctl dispatch dpms on";
+        after_sleep_cmd = "hyprctl dispatch 'hl.dsp.dpms({ mode = \"on\" })'";
       };
       listener = [
         {
@@ -158,8 +161,8 @@ in
         }
         {
           timeout = 1200;
-          on-timeout = "hyprctl dispatch dpms off";
-          on-resume = "hyprctl dispatch dpms on";
+          on-timeout = "hyprctl dispatch 'hl.dsp.dpms({ mode = \"off\" })'";
+          on-resume = "hyprctl dispatch 'hl.dsp.dpms({ mode = \"on\" })'";
         }
       ];
     };
@@ -234,20 +237,6 @@ in
       Service = {
         ExecStart = "${pkgs.swaynotificationcenter}/bin/swaync";
         Restart = "on-failure";
-      };
-      Install.WantedBy = [ "graphical-session.target" ];
-    };
-
-    proton-mail = {
-      Unit = {
-        Description = "Proton Mail desktop client";
-        PartOf = [ "graphical-session.target" ];
-        After = [ "graphical-session.target" ];
-      };
-      Service = {
-        ExecStart = "${pkgs.flatpak}/bin/flatpak run me.proton.Mail";
-        Restart = "on-failure";
-        RestartSec = 5;
       };
       Install.WantedBy = [ "graphical-session.target" ];
     };

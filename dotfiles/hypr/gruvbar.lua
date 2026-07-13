@@ -29,11 +29,11 @@ hl.plugin.gruvbar.add_button({
 })
 hl.plugin.gruvbar.add_button({
   bg = "rgb(fabd2f)", size = 14, glyph = "󰖯",
-  command = "hyprctl dispatch fullscreen 1",
+  command = [[hyprctl dispatch 'hl.dsp.window.fullscreen({ mode = "maximized" })']],
   fg = "rgb(282828)",
 })
 hl.plugin.gruvbar.add_button({
   bg = "rgb(b8bb26)", size = 14, glyph = "󰖰",
-  command = "hyprctl dispatch movetoworkspacesilent special:minimized",
+  command = [[hyprctl dispatch 'hl.dsp.window.move({ workspace = "special:minimized", silent = true })']],
   fg = "rgb(282828)",
 })

@@ -100,7 +100,7 @@ in
   virtualisation.oci-containers = {
     backend = "docker";
     containers.windows = {
-      autoStart = false;
+      autoStart = true;
       image = "dockurr/windows";
       environment = {
         VERSION = "11";

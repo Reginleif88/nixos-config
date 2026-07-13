@@ -3,6 +3,12 @@ hl.config({
   cursor = {
     no_hardware_cursors = true,
   },
+  misc = {
+    -- Both default to false: once an output is DPMS-off, no input can wake
+    -- it and the only way back is a forced modeset from another machine.
+    mouse_move_enables_dpms = true,
+    key_press_enables_dpms = true,
+  },
 })
 
 -- Treat the local Windows VM as the desktop on workspace 2.

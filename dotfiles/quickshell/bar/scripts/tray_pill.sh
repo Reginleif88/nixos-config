@@ -73,12 +73,12 @@ case "$action" in
         focused=$(hyprctl activewindow -j | jq -r '.address')
 
         if [ "$workspace" = "special:minimized" ]; then
-            hyprctl dispatch movetoworkspace "e+0,address:$address"
-            hyprctl dispatch focuswindow "address:$address"
+            hyprctl dispatch "hl.dsp.window.move({ workspace = \"e+0\", window = \"address:$address\" })"
+            hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })"
         elif [ "$address" = "$focused" ]; then
-            hyprctl dispatch movetoworkspacesilent "special:minimized,address:$address"
+            hyprctl dispatch "hl.dsp.window.move({ workspace = \"special:minimized\", window = \"address:$address\", silent = true })"
         else
-            hyprctl dispatch focuswindow "address:$address"
+            hyprctl dispatch "hl.dsp.focus({ window = \"address:$address\" })"
         fi
         ;;
 
