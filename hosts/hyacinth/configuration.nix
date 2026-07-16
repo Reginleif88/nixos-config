@@ -125,10 +125,19 @@ in
         "/var/lib/windows:/storage"
         "/home/reginleif88/Documents:/shared"
         "${windowsOem}:/oem:ro"
+        # Live devtmpfs bind, deliberately not `devices`: --device snapshots the
+        # nodes present at container start, so a stick plugged in later would
+        # never appear. Scoped to bus 2 to keep bus 1 (keyboard, mouse) unseen.
+        "/dev/bus/usb/002:/dev/bus/usb/002"
       ];
       extraOptions = [
         "--cap-add=NET_ADMIN"
         "--stop-timeout=120"
+        # Visibility is not permission: the device cgroup only allows the
+        # major:minor pairs known at container start, so hotplugged nodes would
+        # be visible but EPERM. Wildcard is forced -- Docker cannot express
+        # minor ranges, and bus 2 needs 128-255.
+        "--device-cgroup-rule=c 189:* rwm"
       ];
     };
   };
