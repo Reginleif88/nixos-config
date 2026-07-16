@@ -287,11 +287,17 @@ Expected: no `libusb` claim failures, no `could not open host usb device`, and n
 Give QEMU ~5s to poll, then:
 
 ```bash
-ls -l /sys/bus/usb/devices/2-6/2-6:1.0/driver 2>&1
+basename "$(readlink -f /sys/bus/usb/devices/2-6/2-6:1.0/driver)"
 lsblk -o NAME,FSTYPE,TRAN | grep -E "sdb|NAME"
 ```
 
-Expected: the `driver` symlink is **gone** (`No such file or directory`), and `sdb` no longer appears in `lsblk`. Both confirm libusb detached `usb-storage` and QEMU now owns the device.
+Expected: driver is **`usbfs`** (not `usb-storage`), and `sdb` no longer appears
+in `lsblk`. Both confirm libusb detached `usb-storage` and QEMU now owns the
+device.
+
+Note: the `driver` symlink does **not** disappear — libusb *rebinds* the
+interface to `usbfs`, the kernel's "userspace owns this" state. Testing for the
+symlink's absence gives a false negative. Verified 2026-07-16.
 
 - [ ] **Step 7: Verify Windows sees the drive**
 
@@ -357,7 +363,7 @@ Symptom-to-layer mapping, ordered by likelihood. The two-task split exists so th
 | `usbnode` prints nothing | Hardware | Stick is unplugged or dead. |
 | Node not visible in container (Task 1 Step 6) | Docker | Bind mount missing or the container was not recreated. Check `docker inspect windows` for the mount. |
 | Node visible but `DENIED` (Task 1 Step 7) | Docker | The cgroup rule did not apply. Check Step 5's escaping check. |
-| Node openable but `usb-storage` still bound (Task 2 Step 6) | QEMU | `ARGUMENTS` typo, or QEMU has no USB controller to attach to. Check `docker logs windows`. |
+| Node openable but driver still `usb-storage` (Task 2 Step 6) | QEMU | `ARGUMENTS` typo, or QEMU has no USB controller to attach to. Check `docker logs windows`. Driver `usbfs` means QEMU *did* claim it — that is success, not failure. |
 | Windows never shows the drive but host lost `sdb` | Windows | QEMU claimed it successfully; the problem is inside the guest. |
 | A second identical stick gets grabbed too | Design limit | `31c0:1234` is a generic ID. Documented in the spec; no fix within the auto-scan approach. |
 

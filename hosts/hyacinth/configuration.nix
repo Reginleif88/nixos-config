@@ -109,7 +109,11 @@ in
         CPU_MODEL = "host";
         DISK_SIZE = "256G";
         ALLOCATE = "Y";
-        ARGUMENTS = "-rtc base=localtime";
+        # usb-host with vendorid/productid registers a QEMU auto-scan filter: it
+        # polls ~every 2s and attaches/releases the BitLocker stick on plug and
+        # unplug with the VM running. Matching by ID rather than hostbus/hostaddr
+        # is what survives devnum changing on every replug.
+        ARGUMENTS = "-rtc base=localtime -device usb-host,vendorid=0x31c0,productid=0x1234";
         SAMBA = "Y";
       };
       devices = [

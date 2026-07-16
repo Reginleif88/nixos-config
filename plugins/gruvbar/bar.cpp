@@ -9,9 +9,11 @@
 #define private public
 #include <hyprland/src/managers/input/InputManager.hpp>
 #undef private
-#include <hyprland/src/managers/KeybindManager.hpp>
 #include <hyprland/src/managers/input/InputManager.hpp>
 #include <hyprland/src/layout/LayoutManager.hpp>
+#include <hyprland/src/config/lua/ConfigManager.hpp>
+#include <hyprland/src/config/supplementary/executor/Executor.hpp>
+#include <hyprland/src/debug/log/Logger.hpp>
 #include <hyprland/src/desktop/state/FocusState.hpp>
 #include <hyprland/src/desktop/state/ViewState.hpp>
 #include <hyprland/src/desktop/state/WindowState.hpp>
@@ -380,6 +382,38 @@ bool CBar::isLayerSurfaceAbove() {
     return false;
 }
 
+// Run a button's configured command.
+//
+// A command of the form `hyprctl dispatch '<lua>'` is, on Hyprland 0.56+,
+// nothing but `hl.dispatch(<lua>)` evaluated on the compositor's Lua state
+// (see dispatchRequest() in Hyprland's HyprCtl.cpp). Evaluate it in-process
+// instead of spawning hyprctl: it is the same code path minus the socket
+// round-trip, so the clicked window can't change underneath us in between.
+//
+// Anything else is a plain shell command and goes to the executor.
+static void runButtonCommand(const std::string& cmd) {
+    static constexpr std::string_view DISPATCH_PREFIX = "hyprctl dispatch ";
+
+    if (cmd.starts_with(DISPATCH_PREFIX) && Config::mgr()->type() == Config::CONFIG_LUA) {
+        std::string lua = cmd.substr(DISPATCH_PREFIX.size());
+
+        // A shell would strip one layer of quoting before hyprctl ever saw the
+        // snippet; we bypass the shell, so strip it ourselves.
+        if (lua.size() > 1 && (lua.front() == '\'' || lua.front() == '"') && lua.back() == lua.front())
+            lua = lua.substr(1, lua.size() - 2);
+
+        const auto LUAMGR = dynamicPointerCast<Config::Lua::CConfigManager>(WP<Config::IConfigManager>(Config::mgr()));
+        if (LUAMGR) {
+            // eval() returns nullopt on success, a message on failure.
+            if (const auto FAILURE = LUAMGR->eval(std::format("return hl.dispatch({})", lua)); FAILURE)
+                Log::logger->log(Log::ERR, "[gruvbar] button dispatch failed: {} (lua: {})", *FAILURE, lua);
+            return;
+        }
+    }
+
+    Config::Supplementary::executor()->spawn(cmd);
+}
+
 bool CBar::doButtonPress(Vector2D coords) {
     const auto& cfg = g_pGlobalState->cfg;
 
@@ -397,36 +431,8 @@ bool CBar::doButtonPress(Vector2D coords) {
 
         if (coords.x >= btnPos.x && coords.x <= btnPos.x + b.size + btnPad &&
             coords.y >= btnPos.y && coords.y <= btnPos.y + b.size) {
-            if (!b.cmd.empty()) {
-                // If the command is "hyprctl dispatch X Y", call the dispatcher
-                // directly in-process to avoid subprocess race conditions
-                if (b.cmd.starts_with("hyprctl dispatch ")) {
-                    auto rest = b.cmd.substr(17); // skip "hyprctl dispatch "
-                    auto spacePos = rest.find(' ');
-                    auto dispatcher = spacePos != std::string::npos ? rest.substr(0, spacePos) : rest;
-                    auto arg = spacePos != std::string::npos ? rest.substr(spacePos + 1) : std::string{};
-                    auto it = g_pKeybindManager->m_dispatchers.find(dispatcher);
-                    if (it != g_pKeybindManager->m_dispatchers.end())
-                        it->second(arg);
-                    else
-                        g_pKeybindManager->m_dispatchers["exec"](b.cmd);
-
-                    // After moving to a special workspace, hide it so the
-                    // window truly disappears regardless of which monitor.
-                    if (dispatcher == "movetoworkspacesilent" && arg.starts_with("special:")) {
-                        auto wsName = arg.substr(8);
-                        for (auto& m : State::monitorState()->monitors()) {
-                            if (m->m_activeSpecialWorkspace &&
-                                m->m_activeSpecialWorkspace->m_name == "special:" + wsName) {
-                                g_pKeybindManager->m_dispatchers["togglespecialworkspace"](wsName);
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    g_pKeybindManager->m_dispatchers["exec"](b.cmd);
-                }
-            }
+            if (!b.cmd.empty())
+                runButtonCommand(b.cmd);
             return true;
         }
 

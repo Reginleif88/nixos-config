@@ -46,12 +46,32 @@ hl.bind(mainMod .. " + SHIFT + right", hl.dsp.window.move({ direction = "right" 
 hl.bind(mainMod .. " + SHIFT + up",    hl.dsp.window.move({ direction = "up" }))
 hl.bind(mainMod .. " + SHIFT + down",  hl.dsp.window.move({ direction = "down" }))
 
--- Workspaces 1..10 mapped to keys 1..0
-for i = 1, 10 do
-  local key = i % 10  -- workspace 10 → key '0'
-  hl.bind(mainMod .. " + " .. key,         hl.dsp.focus({ workspace = i }))
-  hl.bind(mainMod .. " + SHIFT + " .. key, hl.dsp.window.move({ workspace = i }))
+-- Workspaces 1..9 mapped to keys 1..9. 2 and 4 get their plain bind below
+-- instead: they carry the RDP window along.
+for i = 1, 9 do
+  if i ~= 2 and i ~= 4 then
+    hl.bind(mainMod .. " + " .. i, hl.dsp.focus({ workspace = i }))
+  end
+  hl.bind(mainMod .. " + SHIFT + " .. i, hl.dsp.window.move({ workspace = i }))
 end
+
+-- SUPER+2 / SUPER+4 park the RDP window on that workspace and go there.
+-- The move passes follow = false and focus is dispatched separately, rather
+-- than letting the move drag the view: a following move races Hyprland's
+-- empty-workspace cleanup (leaving you somewhere unpredictable), and it would
+-- silently do nothing at all when the VM window is absent. Splitting them means
+-- the workspace switch happens either way. hyprctl dispatch evaluates Lua here
+-- (configType = "lua"), hence hl.dsp calls rather than dispatcher strings.
+local function rdpWorkspace(ws)
+  return hl.dsp.exec_cmd(
+    [[bash -c 'hyprctl dispatch "hl.dsp.window.move({ workspace = ]] .. ws
+      .. [[, window = \"class:windows-11\", follow = false })"; ]]
+      .. [[hyprctl dispatch "hl.dsp.focus({ workspace = ]] .. ws .. [[ })"']]
+  )
+end
+
+hl.bind(mainMod .. " + 2", rdpWorkspace(2))
+hl.bind(mainMod .. " + 4", rdpWorkspace(4))
 
 -- Special workspaces
 hl.bind(mainMod .. " + S",         hl.dsp.workspace.toggle_special("magic"))
