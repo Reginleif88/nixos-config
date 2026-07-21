@@ -12,9 +12,10 @@
 #     box reached over SSH, so autologin would be a foothold, not a convenience.
 #   - Public firewall is SSH + 443 only. The clematis LAN rules that opened
 #     :8080/:8081 to the Proxmox host (192.168.1.150) are gone — there is no LAN
-#     and no Proxmox host here. Ignis (:8080) and code-server (:8081) stay
-#     firewalled off the internet and are reached via a Cloudflare Tunnel set up
-#     out-of-band; the tunnel dials OUTBOUND, so it needs no inbound port.
+#     and no Proxmox host here. Ignis (:8080), code-server (:8081), and Actual
+#     Budget (:8082) stay firewalled off the internet and are reached via a
+#     Cloudflare Tunnel set up out-of-band; the tunnel dials OUTBOUND, so it
+#     needs no inbound port.
 
 {
   imports = [
@@ -24,6 +25,7 @@
     ../../modules/ssh-server.nix
     ../../modules/ignis.nix
     ../../modules/code-server.nix
+    ../../modules/actual.nix
   ];
 
   # Bootloader: GRUB in BIOS mode. The VPS has no UEFI (/sys/firmware/efi absent),
