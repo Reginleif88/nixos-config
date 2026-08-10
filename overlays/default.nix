@@ -95,4 +95,44 @@ in
         cp -r ${appimageContents}/usr/share/icons $out/share/icons
       '';
     };
+
+  # gruvbox-material-gtk-theme: removed from nixpkgs on 2026-07-22 as collateral
+  # damage from the gtk-engine-murrine removal (murrine is a GTK *2* engine that
+  # was unmaintained upstream). Only the theme's `gtk-2.0/main.rc` ever
+  # referenced murrine — the GTK3 and GTK4 halves are plain CSS — so the theme
+  # is re-vendored here with the GTK2 variant pruned. GTK2 apps fall back to
+  # Raleigh, which costs nothing on a host that installs no GTK2 apps.
+  # To update: bump `rev`, then refresh `hash`
+  # (nix-prefetch-git https://github.com/TheGreatMcPain/gruvbox-material-gtk).
+  gruvbox-material-gtk-theme = prev.stdenvNoCC.mkDerivation {
+    pname = "gruvbox-material-gtk-theme";
+    version = "0-unstable-2025-01-16";
+
+    src = prev.fetchFromGitHub {
+      owner = "TheGreatMcPain";
+      repo = "gruvbox-material-gtk";
+      rev = "bb306ae972273cbfcbf78f8b772662e8b0678d82";
+      hash = "sha256-F3jVvibeov/3ZlIu+m0SmNsX6l1UwunTFKy+CnAOwok=";
+    };
+
+    dontBuild = true;
+
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/share/themes
+      cp -r themes/* $out/share/themes/
+      # Same self-announcing spirit as `--replace-fail` above: the unquoted glob
+      # is left literal when it matches nothing, so `rm` fails the build the day
+      # upstream stops shipping gtk-2.0 and this pruning can be deleted.
+      rm -r $out/share/themes/*/gtk-2.0
+      runHook postInstall
+    '';
+
+    meta = with prev.lib; {
+      description = "Gruvbox Material GTK theme (GTK3/GTK4 only, murrine-free)";
+      homepage = "https://github.com/TheGreatMcPain/gruvbox-material-gtk";
+      license = licenses.gpl3Only;
+      platforms = platforms.all;
+    };
+  };
 }
