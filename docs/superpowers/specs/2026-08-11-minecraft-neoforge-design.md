@@ -57,7 +57,14 @@ nixpkgs, and `~/.minecraft` does not exist on this machine at all.
   any modern JDK runs it). It fetches the real launcher at runtime. Pinning the
   bootstrap therefore does **not** create a version-lag treadmill — contrast
   Proton Mail, where the shipped version was the product.
-- The jar bundles FlatLaf (`libflatlaf-linux-x86_64.so`), i.e. the UI is Swing.
+- The jar bundles FlatLaf (`libflatlaf-linux-x86_64.so`), but **that is a red
+  herring** — it styles only the bootstrap's own progress window. The launcher
+  the bootstrap downloads renders through **JavaFX 22.0.2**, which SKlauncher
+  fetches itself into `~/.minecraft/sklauncher/javafx/` (six jars:
+  base/controls/graphics/media/swing/web). Discovered by running the wrapper,
+  not by reading the jar: it died with `UnsatisfiedLinkError:
+  libgthread-2.0.so.0: cannot open shared object file` out of
+  `libglassgtk3.so`, JavaFX's GTK3 backend.
 - **The NeoForge installer supports a headless client install.**
   `--install-client [File]` defaults to `/home/reginleif88/.minecraft`.
   Installer URL
@@ -142,6 +149,28 @@ alternative backend; ALSA/Pulse/JACK/PipeWire all resolve) and `libdbus-1.so.3`
 (gates only OpenAL's RTKit realtime-priority hint). Both are **deliberately
 omitted** — audio works without them.
 
+#### Plus the launcher's own JavaFX/GTK3 stack
+
+Separate from the game's natives, the launcher UI needs its own libraries. Taking
+the union of unresolved `DT_NEEDED` entries across all 22 `.so` files in the
+downloaded JavaFX jars gives: `glib` (libglib/libgio/libgmodule/libgobject/
+libgthread), `gtk3` (libgtk-3/libgdk-3), `gdk-pixbuf`, `pango` (libpango/
+libpangocairo/libpangoft2), `cairo` (libcairo/libcairo-gobject), `atk`,
+`freetype`, `fontconfig`, `libxtst`. All are added.
+
+Excluded from that union:
+
+- `libavcodec` / `libavformat` at soversions 54, 56, 57, 58, 59 and 60 — the
+  optional media `avplugin`s. Pinning six ffmpeg ABIs is not worth it; the cost
+  is video inside the launcher's WebView, not the launcher.
+- `libgstreamer-lite.so` and `libjvm.so` — shipped in the same jar and already
+  present in the running JVM respectively, so they resolve unaided.
+
+`GDK_BACKEND=x11` is set on the wrapper as well: JavaFX 22's glass backend is
+GTK3-based but X11-only, so on Hyprland it would otherwise select GDK's Wayland
+backend and fail. Same workaround, for the same reason, as the existing
+`moonlight-qt` wrapper at `home/apps.nix:100`.
+
 **(b) `neoforge-install` command**, also in `overlays/default.nix` so the
 version pin sits alongside the other pinned sources. A single
 `neoforgeVersion = "21.1.248"` variable drives the URL. The script:
@@ -166,10 +195,13 @@ version pin, the JDK, and the procedure; it does not own the tree.
 
 ## Known, accepted caveats
 
-- Both the SKlauncher Swing UI and the game render through **XWayland**: JDK 21
-  ships no Wayland toolkit, and Mojang's vendored GLFW is X11-only.
-  `glfw3-minecraft` is present for setups that can use it, but the vendored
-  natives take precedence. This is expected, not a defect.
+- Both the SKlauncher UI and the game render through **XWayland**: JavaFX 22's
+  GTK3 glass backend is X11-only (hence the forced `GDK_BACKEND=x11`), and
+  Mojang's vendored GLFW is an X11 build. `glfw3-minecraft` is present for setups
+  that can use it, but the vendored natives take precedence. Expected, not a
+  defect.
+- Video inside the launcher's WebView will not play, by choice (see the excluded
+  ffmpeg ABIs above). The launcher itself is unaffected.
 - SKlauncher self-updates its inner launcher at runtime, so the running version
   will drift above the pinned bootstrap version. That is the intended design.
 

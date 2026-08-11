@@ -125,8 +125,11 @@ in
   # `addDriverRunpath.driverLink` must stay FIRST: it is how libGL finds the NVIDIA
   # driver on this host. Without it the game falls back to software GL or dies.
   #
-  # Both the launcher UI (Swing/FlatLaf) and the game render via XWayland — JDK 21
-  # ships no Wayland toolkit and the vendored GLFW is X11-only. Expected, not a bug.
+  # Both the launcher UI and the game render via XWayland, and GDK_BACKEND=x11 is
+  # set to guarantee it: JavaFX 22's glass backend is GTK3-based but X11-only, so
+  # on Hyprland it would otherwise pick GDK's Wayland backend and fail. Same
+  # workaround (and same reason) as the moonlight-qt wrapper in home/apps.nix. The
+  # game is X11 regardless, since the vendored GLFW is an X11 build.
   sklauncher =
     let
       version = "3.2.18";
@@ -173,6 +176,31 @@ in
         # and PipeWire above all resolve) and libdbus-1.so.3 (gates only OpenAL's
         # RTKit realtime-priority hint). Audio works without either; they were
         # considered, not missed.
+
+        # ── The LAUNCHER's own UI, which is JavaFX, not Swing ────────────────
+        # The bundled FlatLaf natives are a red herring: the pinned jar is only a
+        # bootstrap, and the launcher it downloads renders through JavaFX 22.0.2,
+        # which SKlauncher fetches itself into ~/.minecraft/sklauncher/javafx/.
+        # Without the libraries below the launcher dies on startup with
+        # `UnsatisfiedLinkError: libgthread-2.0.so.0: cannot open shared object
+        # file` from libglassgtk3.so — i.e. JavaFX's GTK3 backend.
+        #
+        # This list is the union of unresolved DT_NEEDED entries across every .so
+        # in those JavaFX jars, not a guess. Deliberately excluded from it:
+        #   - libavcodec/libavformat (soversions 54,56,57,58,59,60): the optional
+        #     media avplugins. Skipped rather than pinning six ffmpeg ABIs — the
+        #     cost is video inside the launcher's WebView, not the launcher.
+        #   - libgstreamer-lite.so and libjvm.so: shipped alongside in the same
+        #     jar / already in the running JVM, so they resolve without help.
+        glib # libglib, libgio, libgmodule, libgobject, libgthread
+        gtk3 # libgtk-3, libgdk-3
+        gdk-pixbuf
+        pango # libpango, libpangocairo, libpangoft2
+        cairo # libcairo, libcairo-gobject
+        atk
+        freetype
+        fontconfig
+        libxtst
       ];
     in
     prev.stdenvNoCC.mkDerivation {
@@ -192,6 +220,7 @@ in
         install -Dm444 $src $out/share/sklauncher/SKlauncher.jar
         makeWrapper ${prev.jdk21}/bin/java $out/bin/sklauncher \
           --add-flags "-jar $out/share/sklauncher/SKlauncher.jar" \
+          --set GDK_BACKEND x11 \
           --set LD_LIBRARY_PATH "${prev.addDriverRunpath.driverLink}/lib:${prev.lib.makeLibraryPath runtimeLibs}"
         runHook postInstall
       '';
