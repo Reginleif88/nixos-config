@@ -139,6 +139,18 @@ in
     # ydotool CLI that OpenWhispr shells out to for text injection; the matching
     # ydotoold daemon runs as the user service defined below.
     ydotool
+
+    # SKlauncher (skmedix.pl) + the NeoForge 1.21.1 installer for it. Both are
+    # defined in overlays/default.nix; see there for why the wrapper sets
+    # LD_LIBRARY_PATH and why the install is a command rather than an activation
+    # script. Run `neoforge-install` once after a rebuild, then pick
+    # `neoforge-21.1.248` in SKlauncher's version list.
+    #
+    # This pair owns ~/.minecraft. Official Minecraft lives in Prism Launcher
+    # (modules/gaming.nix), which keeps its own instance dirs — no shared state,
+    # so neither launcher can break the other.
+    sklauncher
+    neoforge-install
   ];
 
   # ydotoold — backend that lets OpenWhispr type transcribed text into the
@@ -248,6 +260,15 @@ in
       categories = [ "Game" ];
       # Must equal the launcher's --class so the .desktop maps to the window.
       settings.StartupWMClass = "boosteroid";
+    };
+
+    # SKlauncher ships as a bare jar, so it brings no .desktop of its own.
+    sklauncher = {
+      name = "SKlauncher";
+      exec = "sklauncher";
+      icon = "applications-games";
+      comment = "Minecraft launcher (skmedix.pl) — NeoForge via `neoforge-install`";
+      categories = [ "Game" ];
     };
   };
 

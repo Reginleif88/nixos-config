@@ -96,6 +96,138 @@ in
       '';
     };
 
+  # sklauncher: third-party Minecraft launcher from https://skmedix.pl/downloads,
+  # not in nixpkgs. Same single-source-of-truth shape as escrcpy/openwhispr above —
+  # bump `version` and refresh `hash` to update.
+  #
+  # Getting the URL on a bump: the download page is a Nuxt SPA, so the link is not
+  # in the served HTML. It is assembled from `l.siteUrl` inside a /_nuxt/*.js chunk,
+  # which conveniently carries the expected SHA-256 of every artifact inline next to
+  # it (`universal_hash` is the one for this jar). Grep the chunks for
+  # `/binaries/skl/`, then cross-check with `nix store prefetch-file <url>`.
+  #
+  # This pins only a BOOTSTRAP: the jar's manifest is
+  # `Main-Class: pl.skmedix.bootstrap.Main` and it downloads the real launcher at
+  # runtime. So the running launcher drifts ahead of `version` by design, and there
+  # is no version-lag treadmill here (contrast Proton Mail, where the shipped
+  # version *was* the product and nixpkgs lag broke the server-side minimum).
+  #
+  # LD_LIBRARY_PATH is the entire reason modded Minecraft works under this wrapper.
+  # Mojang ships prebuilt LWJGL natives (libglfw.so, libopenal.so) that are
+  # perfectly good binaries but cannot resolve their own libX11.so.6 / libGL.so.1,
+  # because NixOS has no /usr/lib. The game runs as a CHILD of the launcher and
+  # inherits this variable, so the deps resolve and the vendored natives load — no
+  # FHS sandbox and no -Dorg.lwjgl.*.libname overrides needed. The library list is
+  # copied deliberately from nixpkgs' own prismlauncher wrapper
+  # (pkgs/by-name/pr/prismlauncher/package.nix), which is already validated against
+  # real Minecraft native loading; keep it in sync rather than hand-rolling.
+  #
+  # `addDriverRunpath.driverLink` must stay FIRST: it is how libGL finds the NVIDIA
+  # driver on this host. Without it the game falls back to software GL or dies.
+  #
+  # Both the launcher UI (Swing/FlatLaf) and the game render via XWayland — JDK 21
+  # ships no Wayland toolkit and the vendored GLFW is X11-only. Expected, not a bug.
+  sklauncher =
+    let
+      version = "3.2.18";
+      runtimeLibs = with prev; [
+        (lib.getLib stdenv.cc.cc)
+        # native versions of what LWJGL would otherwise vendor
+        glfw3-minecraft
+        openal
+        # openal backends
+        alsa-lib
+        libjack2
+        libpulseaudio
+        pipewire
+        # glfw
+        libGL
+        libx11
+        libxcursor
+        libxext
+        libxrandr
+        libxxf86vm
+        wayland
+        udev # oshi
+        vulkan-loader # VulkanMod's lwjgl
+      ];
+    in
+    prev.stdenvNoCC.mkDerivation {
+      pname = "sklauncher";
+      inherit version;
+
+      src = prev.fetchurl {
+        url = "https://skmedix.pl/binaries/skl/${version}/SKlauncher-${version}.jar";
+        hash = "sha256-Jac+N3Ch2NFLzlPokg4uiTqsw8cV0Psi+HjvIJDQOGM=";
+      };
+
+      dontUnpack = true;
+      nativeBuildInputs = [ prev.makeWrapper ];
+
+      installPhase = ''
+        runHook preInstall
+        install -Dm444 $src $out/share/sklauncher/SKlauncher.jar
+        makeWrapper ${prev.jdk21}/bin/java $out/bin/sklauncher \
+          --add-flags "-jar $out/share/sklauncher/SKlauncher.jar" \
+          --set LD_LIBRARY_PATH "${prev.addDriverRunpath.driverLink}/lib:${prev.lib.makeLibraryPath runtimeLibs}"
+        runHook postInstall
+      '';
+
+      meta = with prev.lib; {
+        description = "SKlauncher — third-party Minecraft launcher (self-updating bootstrap)";
+        homepage = "https://skmedix.pl/downloads";
+        license = licenses.unfree;
+        platforms = [ "x86_64-linux" ];
+        mainProgram = "sklauncher";
+      };
+    };
+
+  # neoforge-install: installs the NeoForge 1.21.1 client profile into
+  # ~/.minecraft so `sklauncher` can see it. Run it once by hand after a rebuild;
+  # re-running is safe.
+  #
+  # Deliberately NOT a home-manager activation script. That would push a ~121 MB
+  # network install into every nixos-rebuild, break offline rebuilds, and write
+  # into a tree the game mutates constantly. ~/.minecraft is inherently mutable
+  # state — Nix owns the version pin, the JDK and the procedure, not the tree.
+  #
+  # The launcher_profiles.json stub is REQUIRED, not defensive tidying: run against
+  # a directory without one, the installer aborts with "There is no minecraft
+  # launcher profile in <dir>, you need to run the launcher first!". A 27-byte stub
+  # satisfies it, after which the install injects its own profile. Only written when
+  # absent, so a real launcher's file is never clobbered.
+  #
+  # To bump: change `neoforgeVersion` and refresh the hash. Pick a version from
+  # https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml
+  # — the 21.1.x line is the one that targets Minecraft 1.21.1. NeoForge 1.21.1
+  # requires Java 21, hence jdk21 rather than the default jdk.
+  neoforge-install =
+    let
+      neoforgeVersion = "21.1.248";
+      installer = prev.fetchurl {
+        url = "https://maven.neoforged.net/releases/net/neoforged/neoforge/${neoforgeVersion}/neoforge-${neoforgeVersion}-installer.jar";
+        hash = "sha256-aO6rdwWbpT3xgS8a+lv1MKslZqPNzV+SSqbnG+QuQQw=";
+      };
+    in
+    prev.writeShellScriptBin "neoforge-install" ''
+      set -euo pipefail
+
+      mc="''${MINECRAFT_DIR:-$HOME/.minecraft}"
+      mkdir -p "$mc"
+
+      if [ ! -e "$mc/launcher_profiles.json" ]; then
+        printf '%s' '{"profiles":{},"version":3}' > "$mc/launcher_profiles.json"
+        echo "neoforge-install: wrote stub $mc/launcher_profiles.json"
+      fi
+
+      # cd first: the installer writes its <jar>.log next to the CWD, and the jar
+      # itself lives in the read-only store.
+      cd "$mc"
+      echo "neoforge-install: installing NeoForge ${neoforgeVersion} into $mc"
+      ${prev.jdk21}/bin/java -jar ${installer} --install-client "$mc"
+      echo "neoforge-install: done — pick 'neoforge-${neoforgeVersion}' in your launcher"
+    '';
+
   # gruvbox-material-gtk-theme: removed from nixpkgs on 2026-07-22 as collateral
   # damage from the gtk-engine-murrine removal (murrine is a GTK *2* engine that
   # was unmaintained upstream). Only the theme's `gtk-2.0/main.rc` ever
