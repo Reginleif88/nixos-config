@@ -150,6 +150,29 @@ in
         wayland
         udev # oshi
         vulkan-loader # VulkanMod's lwjgl
+
+        # Beyond nixpkgs' prismlauncher list, on purpose. LWJGL ships a portable
+        # libglfw.so with almost no DT_NEEDED entries — it dlopen()s nearly
+        # everything by soname at runtime, so `ldd` reports it as fully resolved
+        # while it is not. Dumping its dlopen sonames and checking each against the
+        # search path shows these four unaccounted for, all needed by the X11
+        # backend (libXi is XInput2, i.e. mouse look).
+        #
+        # Prism survives without them only by accident: the JVM's AWT pulls libXi
+        # and libXrender in as DT_NEEDED of libawt_xawt.so via the JDK's own RPATH,
+        # so a later dlopen finds an already-loaded soname and never hits the
+        # filesystem. That is load-order luck, not a contract. Four extra store
+        # paths in LD_LIBRARY_PATH cost nothing, so pin them.
+        libxi
+        libxinerama
+        libxkbcommon
+        libxrender
+
+        # Knowingly NOT added, after the same dlopen audit on libopenal.so:
+        # libportaudio.so.2 (a redundant alternative backend — ALSA, Pulse, JACK
+        # and PipeWire above all resolve) and libdbus-1.so.3 (gates only OpenAL's
+        # RTKit realtime-priority hint). Audio works without either; they were
+        # considered, not missed.
       ];
     in
     prev.stdenvNoCC.mkDerivation {

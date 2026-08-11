@@ -112,6 +112,35 @@ source of truth, with a comment stating what must be re-checked on a bump.
   finds the NVIDIA driver (GTX 1080 / 580.142).
 - Reusing the nixpkgs list rather than hand-rolling one means the set is
   already proven against real Minecraft native loading.
+- **Plus four libraries nixpkgs' Prism list omits**, found by auditing the
+  vendored natives directly (see below): `libxi`, `libxinerama`,
+  `libxkbcommon`, `libxrender`.
+
+#### Why the list intentionally diverges from Prism's
+
+LWJGL 3.3.3 ships a portable `libglfw.so` with almost no `DT_NEEDED` entries —
+it `dlopen`s nearly everything by soname at runtime. `ldd` therefore reports it
+as fully resolved even when it is not, and cannot be used to validate the
+library set. Dumping its dlopen sonames and checking each against the wrapper's
+search path found 13 unaccounted for:
+
+| Soname(s) | Verdict |
+|---|---|
+| `libc`, `libm`, `libdl`, `libpthread`, `librt` | benign — glibc, always on the loader's default path |
+| `libOSMesa.so.6/8`, `libGLES_CM.so.1`, `libdecor-0.so.0` | optional — software-GL fallback, a legacy GLES1 soname, and Wayland client-side decorations (unused; we run X11) |
+| `libXi.so.6`, `libXinerama.so.1`, `libXrender.so.1`, `libxkbcommon.so.0` | **real gaps in the X11 path** — added |
+
+Prism survives the same four gaps only by accident: the JVM's AWT loads `libXi`
+and `libXrender` as `DT_NEEDED` of `libawt_xawt.so` through the JDK's own
+RPATH, so a later `dlopen` finds an already-loaded soname and never touches the
+filesystem. That is load-order luck, not a contract, and `libXi` is XInput2 —
+Minecraft's mouse look. Four extra store paths cost nothing, so they are pinned
+explicitly.
+
+The same audit on `libopenal.so` found `libportaudio.so.2` (a redundant
+alternative backend; ALSA/Pulse/JACK/PipeWire all resolve) and `libdbus-1.so.3`
+(gates only OpenAL's RTKit realtime-priority hint). Both are **deliberately
+omitted** — audio works without them.
 
 **(b) `neoforge-install` command**, also in `overlays/default.nix` so the
 version pin sits alongside the other pinned sources. A single
